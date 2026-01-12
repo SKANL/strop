@@ -114,12 +114,57 @@ organizations (tenant raíz)
 
 #### Flujo de Datos: Suscripción Web a Nuevas Incidencias
 
-1. **Al montar componente de dashboard**: Establecer suscripción al canal de cambios de PostgreSQL.
-2. **Configurar filtro**: Escuchar eventos INSERT en tabla `incidents` donde `project_id` es igual al proyecto seleccionado.
-3. **Al recibir evento** (incidencia creada desde Mobile):
-   - Agregar el nuevo registro al estado local (actualización optimista).
-   - Mostrar notificación toast con preview de la descripción.
-4. **Cleanup**: Al desmontar componente, remover la suscripción.
+**Implementación en JavaScript/TypeScript**:
+
+```typescript
+import { createClient } from '@supabase/supabase-js'
+import type { RealtimePostgresChangesPayload } from '@supabase/supabase-js'
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+)
+
+// 1. Configurar suscripción al montar componente
+useEffect(() => {
+  const channel = supabase
+    .channel('dashboard-incidents')
+    .on<Database['public']['Tables']['incidents']['Row']>(
+      'postgres_changes',
+      {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'incidents',
+        filter: `project_id=eq.${selectedProjectId}`, // Filtro server-side
+      },
+      (payload: RealtimePostgresChangesPayload<any>) => {
+        const newIncident = payload.new
+        
+        // Actualización optimista del estado
+        setIncidents(prev => [newIncident, ...prev])
+        
+        // Mostrar notificación toast
+        toast({
+          title: '¡Nueva incidencia!',
+          description: newIncident.title,
+          variant: 'default',
+        })
+      }
+    )
+    .subscribe()
+
+  // 2. Cleanup al desmontar
+  return () => {
+    channel.unsubscribe()
+  }
+}, [selectedProjectId])
+```
+
+**IMPORTANTE - Performance RLS con Realtime**:
+- Cada evento INSERT dispara evaluación de RLS policies
+- Con 100 usuarios suscritos = 100 "reads" por cada INSERT
+- Usar filtros server-side (`filter: `) para reducir payload
+- Considerar usar Broadcast para alta escala en lugar de Postgres Changes
 
 #### Flujo de Datos: Mobile Crea Incidencia
 
@@ -183,13 +228,62 @@ Los tipos ENUM de PostgreSQL aseguran consistencia estricta entre Web y Mobile:
 
 #### Flujo de Datos: Asignar desde Web, Notificar a Mobile
 
-**Lado Web (Asignación):**
+**Lado Web (Asignación con RLS Optimizado):**
 
-1. Ejecutar UPDATE en tabla `incidents` estableciendo:
-   - `assigned_to`: ID del usuario asignado
-   - `status`: 'ASSIGNED'
-2. Este UPDATE dispara:
-   - Broadcast Realtime hacia Mobile (si app está abierta)
+```typescript
+// Asignar incidencia a un usuario
+const { data, error } = await supabase
+  .from('incidents')
+  .update({
+    assigned_to: selectedUserId,
+    status: 'ASSIGNED'
+  })
+  .eq('id', incidentId)
+  .select(`
+    id,
+    title,
+    assigned_to:users!incidents_assigned_to_fkey(
+      id,
+      full_name,
+      email
+    )
+  `)
+  .single()
+
+if (error) {
+  console.error('Error assigning incident:', error)
+} else {
+  console.log('Incident assigned to:', data.assigned_to.full_name)
+  // Este UPDATE dispara Realtime hacia Mobile
+}
+```
+
+**⚡ Performance: RLS Policies (Schema v3.2)**
+
+Las policies usan el patrón `(select auth.uid())` para cachear `auth.uid()`:
+
+```sql
+-- Política UPDATE optimizada (Schema v3.2)
+CREATE POLICY "Users can update incidents"
+ON incidents FOR UPDATE
+TO authenticated
+USING (
+  (select auth.jwt() ->> 'current_org_id')::uuid = organization_id
+  AND (
+    -- OWNER/SUPERINTENDENT pueden editar todo
+    (select auth.jwt() ->> 'current_org_role') IN ('OWNER', 'SUPERINTENDENT')
+    OR
+    -- RESIDENT puede cerrar si está asignado
+    (
+      (select auth.jwt() ->> 'current_org_role') = 'RESIDENT'
+      AND assigned_to = (select auth.uid())
+      AND status = 'ASSIGNED'
+    )
+  )
+);
+```
+
+Esto resulta en **99.94% de mejora de performance** comparado con `auth.uid()` directo.
 
 **Lado Mobile (Recepción):**
 
@@ -268,12 +362,118 @@ Los tipos ENUM de PostgreSQL aseguran consistencia estricta entre Web y Mobile:
 
 ### Mismo Sistema de Auth para Ambas Plataformas
 
+**Arquitectura de JWT con Custom Claims**:
+
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                         SUPABASE AUTH                                    │
 │                                                                          │
 │  ┌─────────────────────────────────────────────────────────────────┐    │
 │  │                    Custom Access Token Hook                      │    │
+│  │                                                                  │    │
+│  │  function custom_access_token_hook(event JSONB)                 │    │
+│  │  returns JSONB language plpgsql                                 │    │
+│  │                                                                  │    │
+│  │  Agrega claims personalizados al JWT:                           │    │
+│  │  - current_org_id: UUID de organización actual                  │    │
+│  │  - current_org_role: OWNER | SUPERINTENDENT | RESIDENT | CABO   │    │
+│  │  - user_id: ID interno en public.users                          │    │
+│  │  - organizations: Array de orgs del usuario                     │    │
+│  └─────────────────────────────────────────────────────────────────┘    │
+└─────────────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+        ┌──────────────────────────────────────────┐
+        │         JWT Token Structure              │
+        │                                          │
+        │  {                                       │
+        │    "sub": "auth-user-uuid",              │
+        │    "email": "user@example.com",          │
+        │    "role": "authenticated",              │
+        │    "current_org_id": "org-uuid",         │
+        │    "current_org_role": "RESIDENT",       │
+        │    "user_id": "internal-user-uuid",      │
+        │    "organizations": [                    │
+        │      {                                   │
+        │        "org_id": "org-uuid",             │
+        │        "role": "RESIDENT"                │
+        │      }                                   │
+        │    ],                                    │
+        │    "iat": 1234567890,                    │
+        │    "exp": 1234571490                     │
+        │  }                                       │
+        └──────────────────────────────────────────┘
+                              │
+                ┌─────────────┴─────────────┐
+                ▼                           ▼
+        ┌──────────────┐            ┌──────────────┐
+        │  MOBILE APP  │            │  WEB PLATFORM│
+        │              │            │              │
+        │  - Dart/     │            │  - JS/TS     │
+        │    Flutter   │            │    Next.js   │
+        │  - Supabase  │            │  - Supabase  │
+        │    Flutter   │            │    JS        │
+        └──────────────┘            └──────────────┘
+```
+
+### Inicialización del Cliente por Plataforma
+
+**Mobile (Dart/Flutter)**:
+```dart
+import 'package:supabase_flutter/supabase_flutter.dart';
+
+await Supabase.initialize(
+  url: 'https://your-project.supabase.co',
+  anonKey: 'your-anon-key', // Publishable key (safe para cliente)
+  authOptions: FlutterAuthClientOptions(
+    authFlowType: AuthFlowType.pkce, // PKCE flow para mobile (seguro)
+  ),
+);
+
+final supabase = Supabase.instance.client;
+
+// Login
+final response = await supabase.auth.signInWithPassword(
+  email: email,
+  password: password,
+);
+
+// Acceder a custom claims
+final jwt = response.session?.accessToken;
+// supabase-flutter parsea automáticamente y disponibiliza en:
+// response.session?.user.userMetadata
+```
+
+**Web (JavaScript/TypeScript)**:
+```typescript
+import { createClient } from '@supabase/supabase-js'
+import type { Database } from './types/database'
+
+export const supabase = createClient<Database>(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+  {
+    auth: {
+      flowType: 'pkce', // PKCE para mayor seguridad
+      autoRefreshToken: true, // Auto-refresh antes de expiración
+      persistSession: true, // Persistir en localStorage
+      detectSessionInUrl: true, // Para magic links y OAuth
+    },
+  }
+)
+
+// Login
+const { data, error } = await supabase.auth.signInWithPassword({
+  email,
+  password,
+})
+
+// Acceder a custom claims desde JWT
+const jwt = data.session?.access_token
+// Decodificar JWT para leer claims (no validar en cliente)
+const claims = JSON.parse(atob(jwt.split('.')[1]))
+console.log(claims.current_org_id) // UUID de la org actual
+```    │
 │  │  ┌─────────────────────────────────────────────────────────────┐│    │
 │  │  │ {                                                           ││    │
 │  │  │   "sub": "auth-user-id",                                    ││    │
@@ -344,18 +544,53 @@ storage/
 
 #### Bucket: `incident-photos` (Privado)
 
-| Operación | Política | Condición SQL | Web | Mobile |
-|-----------|----------|---------------|-----|--------|
-| SELECT | View org photos | `bucket_id = 'incident-photos' AND (storage.foldername(name))[1] = get_user_org_id()::text` | ✅ | ✅ |
-| INSERT | Upload org photos | `bucket_id = 'incident-photos' AND (storage.foldername(name))[1] = get_user_org_id()::text` | ❌ | ✅ |
-| DELETE | - | Prohibido (evidencia) | - | - |
+**⚡ RLS Policies (Schema v3.2):**
 
-**Validación de Path:**
+```sql
+-- SELECT: Ver fotos de mi organización
+CREATE POLICY "Users can view organization photos"
+ON storage.objects FOR SELECT
+TO authenticated
+USING (
+  bucket_id = 'incident-photos'
+  AND (storage.foldername(name))[1] = (select auth.jwt() ->> 'current_org_id')
+);
 
+-- INSERT: Subir fotos a mi organización
+CREATE POLICY "Users can upload organization photos"
+ON storage.objects FOR INSERT
+TO authenticated
+WITH CHECK (
+  bucket_id = 'incident-photos'
+  AND (storage.foldername(name))[1] = (select auth.jwt() ->> 'current_org_id')
+);
+
+-- DELETE: Prohibido (preservar evidencia)
+-- No hay política DELETE - Storage es append-only para evidencia
 ```
-Path esperado: {org_id}/{project_id}/{incident_id}/{uuid}.jpg
-Ejemplo: "abc123-org/proj456/inc789/foto-uuid.jpg"
+
+**Operaciones por Plataforma:**
+
+| Operación | Web | Mobile | Notas |
+|-----------|-----|--------|-------|
+| SELECT | ✅ Galeria | ✅ Visualizar | URLs firmadas |
+| INSERT | ❌ | ✅ Upload resumable | Mobile captura fotos |
+| DELETE | ❌ | ❌ | Evidencia inmutable |
+
+**Validación de Path (Trigger en Schema v3.2):**
+
+```sql
+-- Trigger: validate_storage_path_organization
+-- Previene inconsistencias entre storage_path y organization_id
+CREATE TRIGGER validate_storage_path_organization
+  BEFORE INSERT ON photos
+  FOR EACH ROW
+  EXECUTE FUNCTION validate_storage_path_matches_org();
 ```
+
+**Path esperado:** `{org_id}/{project_id}/{incident_id}/{uuid}.jpg`
+
+**Ejemplo:** `abc123-org-uuid/proj456-uuid/inc789-uuid/photo-uuid-1234.jpg`
 
 #### Bucket: `org-assets` (Público)
 
@@ -368,19 +603,130 @@ Ejemplo: "abc123-org/proj456/inc789/foto-uuid.jpg"
 
 ### Flujo de Fotos: Mobile → Storage → Web
 
+#### Flujo de Datos: Mobile Sube Foto (Resumable Upload)
+
+**🔑 RECOMENDACIÓN:** Usar TUS protocol para confiabilidad en conexiones de campo.
+
+```dart
+// Mobile (Dart/Flutter)
+import 'package:tus_client/tus_client.dart';
+
+Future<String?> uploadPhotoResumable(
+  File photoFile,
+  String projectId,
+  String incidentId,
+) async {
+  final session = supabase.auth.currentSession;
+  if (session == null) return null;
+  
+  // 1. Comprimir imagen antes de subir
+  final compressedFile = await compressImage(
+    photoFile,
+    maxWidth: 1920,
+    quality: 80,
+  );
+  
+  // 2. Generar path único
+  final orgId = session.user.userMetadata?['current_org_id'];
+  final fileName = '${Uuid().v4()}.jpg';
+  final storagePath = '$orgId/$projectId/$incidentId/$fileName';
+  
+  // 3. Upload resumable
+  try {
+    final client = TusClient(
+      Uri.parse(
+        'https://${SUPABASE_PROJECT_ID}.storage.supabase.co/storage/v1/upload/resumable',
+      ),
+      compressedFile,
+      headers: {
+        'Authorization': 'Bearer ${session.accessToken}',
+        'x-upsert': 'false',
+      },
+      metadata: {
+        'bucketName': 'incident-photos',
+        'objectName': storagePath,
+        'contentType': 'image/jpeg',
+        'cacheControl': '3600',
+      },
+      maxChunkSize: 6 * 1024 * 1024, // 6MB chunks
+    );
+
+    await client.upload();
+    return storagePath;
+  } catch (e) {
+    print('Upload failed: $e');
+    return null;
+  }
+}
+```
+
 #### Flujo de Datos: Web Muestra Galería de Fotos
 
-1. **Consultar paths de fotos**: Obtener `storage_path` y `created_at` de tabla `photos` filtrando estrictamente por `incident_id`. Ordenar por fecha de creación.
-2. **Generar URLs firmadas**: Para cada path, solicitar a Supabase Storage una URL firmada con expiración de 3600 segundos (1 hora).
-3. **Filtrar URLs válidas**: Remover cualquier URL nula del resultado.
-4. **Renderizar galería**: Mostrar imágenes usando las URLs firmadas temporales.
+```typescript
+// Web (TypeScript/React)
+interface IncidentPhoto {
+  id: string
+  storage_path: string
+  uploaded_at: string
+  signedUrl?: string
+}
 
-#### Flujo de Datos: Mobile Sube Foto
+async function loadIncidentPhotos(incidentId: string): Promise<IncidentPhoto[]> {
+  // 1. Consultar paths de fotos
+  const { data: photos, error } = await supabase
+    .from('photos')
+    .select('id, storage_path, uploaded_at')
+    .eq('incident_id', incidentId)
+    .order('uploaded_at', { ascending: true })
+  
+  if (error || !photos) return []
+  
+  // 2. Generar URLs firmadas (1 hora de expiración)
+  const photosWithUrls = await Promise.all(
+    photos.map(async (photo) => {
+      const { data: signedUrl } = await supabase.storage
+        .from('incident-photos')
+        .createSignedUrl(photo.storage_path, 3600) // 1 hora
+      
+      return {
+        ...photo,
+        signedUrl: signedUrl?.signedUrl
+      }
+    })
+  )
+  
+  // 3. Filtrar URLs válidas
+  return photosWithUrls.filter(p => p.signedUrl)
+}
 
-1. **Comprimir imagen**: Reducir calidad a 80% y dimensiones máximas a 1920x1920px.
-2. **Generar path único**: Estructura: `{org_id}/{project_id}/{incident_id}/{uuid}.jpg`
-3. **Upload resumable**: Subir binario comprimido al bucket `incident-photos` con tipo MIME `image/jpeg`.
-4. **Retornar path**: El path se usa para registrar la foto en base de datos.
+// Uso en componente React
+function PhotoGallery({ incidentId }: { incidentId: string }) {
+  const [photos, setPhotos] = useState<IncidentPhoto[]>([])
+  
+  useEffect(() => {
+    loadIncidentPhotos(incidentId).then(setPhotos)
+  }, [incidentId])
+  
+  return (
+    <div className="grid grid-cols-3 gap-4">
+      {photos.map(photo => (
+        <img 
+          key={photo.id}
+          src={photo.signedUrl}
+          alt="Incident photo"
+          className="rounded-lg"
+        />
+      ))}
+    </div>
+  )
+}
+```
+
+**🎯 Best Practices:**
+- ✅ Mobile: Comprimir antes de subir (reduce tiempo y costo)
+- ✅ Web: URLs firmadas con expiración corta (seguridad)
+- ✅ Validar cantidad de fotos (max 5 por incidencia)
+- ✅ Usar resumable uploads para archivos >1MB
 
 ---
 
@@ -395,13 +741,155 @@ Ejemplo: "abc123-org/proj456/inc789/foto-uuid.jpg"
 | `incident:{id}:comments` | INSERT | Web (detalle), Mobile (detalle) | Thread de comentarios |
 | `user:{id}:assignments` | UPDATE incidents | Mobile | Notificar nuevas asignaciones |
 
-### Diagrama de Suscripciones
+### Mejores Prácticas de Realtime
 
+**⚠️ Limitaciones de Postgres Changes:**
+
+- Procesamiento en single thread (compute upgrades no ayudan)
+- Con 100 usuarios suscritos = 100 evaluaciones de RLS por evento
+- DELETE events no soportan filtros (limitación de Postgres WAL)
+
+**🔑 Recomendaciones por Escala:**
+
+| Usuarios Concurrentes | Estrategia | Implementación |
+|----------------------|------------|------------------|
+| <50 | Postgres Changes | Filtros server-side |
+| 50-100 | Postgres Changes optimizado | RLS policies cacheadas con `(select auth.uid())` |
+| >100 | **Broadcast** | Triggers custom + Realtime Authorization |
+
+**Ejemplo: Broadcast para Alta Escala**
+
+```sql
+-- 1. Crear función para emitir Broadcast
+CREATE OR REPLACE FUNCTION broadcast_incident_changes()
+RETURNS TRIGGER AS $$
+BEGIN
+  PERFORM realtime.broadcast_changes(
+    'incidents:' || NEW.project_id::text,
+    TG_OP,
+    TG_OP,
+    TG_TABLE_NAME,
+    TG_TABLE_SCHEMA,
+    NEW,
+    OLD
+  );
+  RETURN NULL;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- 2. Crear trigger
+CREATE TRIGGER incidents_broadcast_trigger
+  AFTER INSERT OR UPDATE OR DELETE ON incidents
+  FOR EACH ROW EXECUTE FUNCTION broadcast_incident_changes();
 ```
-┌─────────────────────────────────────────────────────────────────────────┐
-│                      REALTIME CHANNELS                                   │
-│                                                                          │
-│  project:abc123:incidents                                               │
+
+```typescript
+// Client-side (Web/Mobile)
+const channel = supabase
+  .channel(`incidents:${projectId}`, {
+    config: { private: true } // Requiere Realtime Authorization
+  })
+  .on('broadcast', { event: 'INSERT' }, (payload) => {
+    console.log('New incident:', payload)
+    setIncidents(prev => [payload.new, ...prev])
+  })
+  .on('broadcast', { event: 'UPDATE' }, (payload) => {
+    console.log('Updated incident:', payload)
+    setIncidents(prev => prev.map(i => 
+      i.id === payload.new.id ? payload.new : i
+    ))
+  })
+  .subscribe()
+```
+
+**Ventajas de Broadcast:**
+- ✅ No evalúa RLS por cada subscriber (mejor performance)
+- ✅ Más flexible para custom payloads
+- ✅ Escala mejor con muchos usuarios
+
+---
+
+## 🎯 MATRIZ DE DECISIÓN: POSTGRES CHANGES VS BROADCAST
+
+| Criterio | Postgres Changes | Broadcast |
+|----------|------------------|----------|
+| **Setup Complexity** | ✅ Simple (built-in) | ⚠️ Requiere triggers |
+| **Performance <50 users** | ✅ Excelente | ✅ Excelente |
+| **Performance >100 users** | ❌ Bottleneck | ✅ Escala bien |
+| **RLS Enforcement** | ✅ Automático | ⚠️ Manual en trigger |
+| **Filtros Server-side** | ✅ Sí (column filters) | ⚠️ En trigger |
+| **Custom Payloads** | ❌ Solo datos de tabla | ✅ Cualquier JSON |
+| **DELETE Events** | ❌ No filtrables | ✅ Filtrables |
+
+**Decisión para STROP:**
+- **MVP (Fase 1):** Usar Postgres Changes con filtros server-side
+- **Escala (Fase 2):** Migrar a Broadcast cuando >100 usuarios concurrentes
+
+---
+
+## ✅ CHECKLIST DE INTEGRACIÓN
+
+### Mobile App
+- [ ] Implementar `signInWithPassword` con custom claims
+- [ ] Usar patrón RLS optimizado en queries (`(select auth.uid())`)
+- [ ] Configurar resumable uploads para fotos (TUS protocol)
+- [ ] Implementar retry logic para conexiones inestables
+- [ ] Suscribirse a Postgres Changes con filtros server-side
+- [ ] Validar límite de 5 fotos por incidencia
+- [ ] Limpiar suscripciones Realtime en unmount/dispose
+- [ ] Comprimir imágenes antes de upload (max 1920px, 80% quality)
+
+### Web Platform
+- [ ] Configurar SSR con `@supabase/ssr`
+- [ ] Implementar queries con filtros explícitos
+- [ ] Optimizar joins con foreign key names
+- [ ] Generar URLs firmadas para fotos (expiración 1-2 horas)
+- [ ] Usar Broadcast para >100 usuarios (opcional Fase 2)
+- [ ] Validar RLS policies en dashboard
+- [ ] Configurar error monitoring (Sentry/etc)
+- [ ] Implementar paginación con `.limit()` y `.range()`
+
+### Integración General
+- [ ] Verificar JWT claims incluyen `current_org_id` y `current_org_role`
+- [ ] Testear RLS policies con diferentes roles (OWNER, RESIDENT, CABO)
+- [ ] Validar storage path vs organization_id consistency
+- [ ] Documentar custom functions y triggers
+- [ ] Implementar health checks para Realtime
+- [ ] Configurar rate limiting en Edge Functions
+- [ ] Setup monitoring de Storage usage
+- [ ] Testear flujo completo: Mobile crea → Web visualiza → Mobile recibe asignación
+
+---
+
+## 📚 RECURSOS Y REFERENCIAS
+
+### Documentación Oficial Supabase
+
+- [Row Level Security Performance](https://supabase.com/docs/guides/database/postgres/row-level-security#performance)
+- [Realtime Postgres Changes](https://supabase.com/docs/guides/realtime/postgres-changes)
+- [Realtime Broadcast](https://supabase.com/docs/guides/realtime/broadcast)
+- [Storage Resumable Uploads](https://supabase.com/docs/guides/storage/uploads/resumable-uploads)
+- [Custom Access Token Hook](https://supabase.com/docs/guides/auth/auth-hooks/custom-access-token-hook)
+- [Server-Side Rendering with SSR](https://supabase.com/docs/guides/auth/server-side-rendering)
+
+### Documentación del Proyecto
+
+- [SUPABASE_INTEGRATION_GUIDE.md](./SUPABASE_INTEGRATION_GUIDE.md) - Guía completa de integración
+- [STROP_MOBILE_APP.md](./STROP_MOBILE_APP.md) - Especificación Mobile
+- [STROP_WEB_PLATFORM.md](./STROP_WEB_PLATFORM.md) - Especificación Web
+- [supabase-strop-schema-optimized-v2.sql](./supabase-strop-schema-optimized-v2.sql) - Schema v3.2
+- [REQUIREMENTS_MVP.md](./REQUIREMENTS_MVP.md) - Requerimientos del negocio
+
+### Performance Benchmarks
+
+- RLS con `(select auth.uid())`: **99.94% mejora** vs `auth.uid()` directo
+- Realtime Postgres Changes: Hasta 800,000 msgs/sec con Broadcast
+- Storage: 500GB max file size (paid plans), 5MB recomendado para mobile
+- Custom Access Token Hook: <1ms latency adicional
+
+---
+
+**Fin del documento** - Para preguntas o actualizaciones, consultar documentación oficial de Supabase o el equipo de desarrollo.
 │  ├── Web Dashboard (suscrito a INSERT + UPDATE)                         │
 │  └── Mobile Lista (suscrito a UPDATE assigned_to=me)                    │
 │                                                                          │
@@ -511,77 +999,75 @@ Los siguientes triggers se ejecutan automáticamente y afectan datos visibles en
 
 ### VIEW Compartida: `bitacora_timeline`
 
-La vista `bitacora_timeline` unifica eventos de diferentes fuentes para el timeline de bitácora (solo Web):
+La vista `bitacora_timeline` unifica eventos de diferentes fuentes para el timeline de bitácora. Utiliza JSONB para almacenar metadata flexible:
 
 ```sql
 CREATE OR REPLACE VIEW bitacora_timeline AS
--- Incidencias como eventos
 SELECT
-  i.id,
-  i.project_id,
-  i.organization_id,
-  'INCIDENT' AS event_type,
-  i.type::TEXT AS subtype,
-  i.description AS content,
-  i.created_at AS event_date,
-  i.created_by AS author_id,
-  u.name AS author_name,
-  i.id AS incident_id,
-  NULL::UUID AS entry_id
-FROM incidents i
-JOIN users u ON i.created_by = u.id
+    'INCIDENT'::event_source AS event_source,
+    i.id,
+    i.project_id,
+    i.organization_id,
+    i.created_at AS event_date,
+    i.created_by AS event_user,
+    jsonb_build_object(
+        'type', i.type,
+        'title', i.title,
+        'description', i.description,
+        'status', i.status,
+        'priority', i.priority,
+        'assigned_to', i.assigned_to,
+        'location', i.location
+    ) AS event_data
+FROM public.incidents i
 
 UNION ALL
 
--- Comentarios como eventos
 SELECT
-  c.id,
-  i.project_id,
-  i.organization_id,
-  'COMMENT' AS event_type,
-  NULL AS subtype,
-  c.content,
-  c.created_at AS event_date,
-  c.author_id,
-  u.name AS author_name,
-  c.incident_id,
-  NULL::UUID AS entry_id
-FROM comments c
-JOIN incidents i ON c.incident_id = i.id
-JOIN users u ON c.author_id = u.id
+    'INCIDENT'::event_source AS event_source,
+    c.id,
+    i.project_id,
+    c.organization_id,
+    c.created_at AS event_date,
+    c.author_id AS event_user,
+    jsonb_build_object(
+        'incident_id', c.incident_id,
+        'text', c.text,
+        'parent_type', 'comment'
+    ) AS event_data
+FROM public.comments c
+INNER JOIN public.incidents i ON i.id = c.incident_id
 
 UNION ALL
 
--- Entradas manuales de bitácora
 SELECT
-  be.id,
-  be.project_id,
-  be.organization_id,
-  'MANUAL' AS event_type,
-  be.event_source::TEXT AS subtype,
-  be.content,
-  be.event_date,
-  be.created_by AS author_id,
-  u.name AS author_name,
-  NULL::UUID AS incident_id,
-  be.id AS entry_id
-FROM bitacora_entries be
-JOIN users u ON be.created_by = u.id;
+    b.event_source,
+    b.id,
+    b.project_id,
+    b.organization_id,
+    b.created_at AS event_date,
+    b.created_by AS event_user,
+    jsonb_build_object(
+        'title', b.title,
+        'content', b.content,
+        'metadata', b.metadata
+    ) AS event_data
+FROM public.bitacora_entries b
+
+ORDER BY event_date DESC;
 ```
+
+**Configuración de Seguridad:** `ALTER VIEW public.bitacora_timeline SET (security_invoker = true);`
 
 | Columna | Tipo | Descripción |
 |---------|------|-------------|
+| `event_source` | event_source | Fuente del evento ('INCIDENT', 'MANUAL') |
 | `id` | UUID | ID del evento original |
 | `project_id` | UUID | Proyecto asociado |
 | `organization_id` | UUID | Organización (para RLS) |
-| `event_type` | TEXT | 'INCIDENT', 'COMMENT', 'MANUAL' |
-| `subtype` | TEXT | Tipo específico (incident_type o event_source) |
-| `content` | TEXT | Contenido del evento |
-| `event_date` | TIMESTAMPTZ | Fecha del evento |
-| `author_id` | UUID | ID del autor |
-| `author_name` | TEXT | Nombre del autor |
-| `incident_id` | UUID | Incidencia relacionada (si aplica) |
-| `entry_id` | UUID | Entrada de bitácora (si aplica) |
+| `event_date` | TIMESTAMPTZ | Fecha del evento ordenada DESC |
+| `event_user` | UUID | ID del usuario que creó el evento |
+| `event_data` | JSONB | Datos flexibles (tipo, title, description, status, priority, etc) |
 
 ---
 

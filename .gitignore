@@ -1,5 +1,6 @@
 # Legacy Astro project (deprecated in favor of Next.js strop-web)
 strop_web_admin/
+strop_app_old/
 
 # Documentation context references
 context-BD/

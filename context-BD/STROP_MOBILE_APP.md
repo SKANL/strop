@@ -108,7 +108,7 @@ La aplicación móvil de STROP está diseñada para **personal de campo** (Resid
 
 | Tabla | Operaciones | Campos en INSERT | Campos en UPDATE |
 |-------|-------------|------------------|------------------|
-| `incidents` | CREATE, READ, UPDATE | `project_id`, `type`, `description`, `priority` (status='OPEN' auto) | `status`, `closed_at`, `closed_by`, `closed_notes` |
+| `incidents` | CREATE, READ, UPDATE | `project_id`, `type`, `title`, `description`, `location` (opcional), `priority` (status='OPEN' auto) | `status`, `closed_at`, `closed_by`, `closed_notes` |
 | `photos` | CREATE, READ | `incident_id`, `storage_path` (org_id auto via trigger) | - |
 | `comments` | CREATE, READ | `incident_id`, `text` (author_id auto via trigger) | - |
 
@@ -122,7 +122,9 @@ La aplicación móvil de STROP está diseñada para **personal de campo** (Resid
 | `organization_id` | UUID | AUTO | Se establece via JWT claim |
 | `project_id` | UUID | CREATE | Proyecto seleccionado |
 | `type` | incident_type | CREATE | Tipo de incidencia (4 opciones) |
-| `description` | TEXT (max 1000) | CREATE | Descripción del problema |
+| `title` | VARCHAR(255) | CREATE | Título resumido del problema |
+| `description` | TEXT (max 1000) | CREATE | Descripción detallada |
+| `location` | VARCHAR(255) | CREATE (opcional) | Ubicación específica en la obra |
 | `priority` | incident_priority | CREATE | 'NORMAL' o 'CRITICAL' |
 | `status` | incident_status | READ/UPDATE | 'OPEN' → 'ASSIGNED' → 'CLOSED' |
 | `created_by` | UUID | AUTO | Se establece via trigger |
@@ -229,14 +231,37 @@ La aplicación móvil de STROP está diseñada para **personal de campo** (Resid
 1. **Usuario ingresa credenciales**: Email y password en formulario de login.
 2. **Llamada a Supabase Auth**: Invocar método `signInWithPassword` con las credenciales.
 3. **Respuesta con sesión**: Supabase retorna token JWT con sesión.
-4. **Extraer custom claims**: Decodificar el JWT para obtener:
-   - `org_id`: ID del tenant (organización)
-   - `user_role`: Rol de negocio (RESIDENT, CABO, etc.)
-   - `user_id`: ID en tabla public.users
+4. **Custom Access Token Hook (Schema v3.2)**: El hook inyecta automáticamente:
+   - `current_org_id`: UUID de la organización actual (desde `users.current_organization_id`)
+   - `current_org_role`: Rol del usuario (desde `organization_members.role`)
+   - Estos claims se extraen del JWT sin queries adicionales
 5. **Persistir sesión**: Almacenar tokens en storage seguro del dispositivo para auto-login futuro.
+
+**Código de ejemplo (Dart/Flutter):**
+```dart
+final response = await supabase.auth.signInWithPassword(
+  email: emailController.text,
+  password: passwordController.text,
+);
+
+if (response.session != null) {
+  // Los custom claims ya están en el JWT
+  final session = response.session!;
+  final user = session.user;
+  
+  // Extraer claims inyectados por custom_access_token_hook
+  final orgId = user.userMetadata?['current_org_id'];
+  final orgRole = user.userMetadata?['current_org_role'];
+  
+  print('Logged in as $orgRole in org $orgId');
+}
+```
 
 **¿Por qué persistir sesión?**
 > Cumple el **Objetivo 1**: El personal de campo no debe perder tiempo re-autenticándose cada vez que abre la app. La sesión persiste hasta logout o expiración.
+
+**⚡ Performance: Custom Access Token Hook**
+> El schema v3.2 incluye un `custom_access_token_hook` que inyecta el contexto organizacional directamente en el JWT. Esto elimina la necesidad de queries adicionales para obtener `organization_id` y `role` en cada request.
 
 ---
 
@@ -252,21 +277,134 @@ La aplicación móvil de STROP está diseñada para **personal de campo** (Resid
 
 #### Flujo de Datos: Consulta de Incidencias Asignadas
 
-1. **Consultar tabla `incidents`**: Seleccionar todos los campos más datos relacionados del proyecto.
+1. **Consultar tabla `incidents`**: Seleccionar campos específicos más datos relacionados del proyecto.
 2. **Filtro de asignación**: Restringir estrictamente a registros donde `assigned_to` es igual al ID del usuario actual.
 3. **Excluir cerradas**: Filtrar donde `status` es distinto de 'CLOSED'.
 4. **Ordenamiento doble**:
    - Primero por `priority` en orden descendente (CRÍTICAS primero)
    - Luego por `created_at` en orden descendente (más recientes primero)
 
+**Código de ejemplo (Dart/Flutter):**
+```dart
+final response = await supabase
+  .from('incidents')
+  .select('''
+    id,
+    type,
+    title,
+    description,
+    priority,
+    status,
+    created_at,
+    project:projects(
+      id,
+      name,
+      location
+    )
+  ''')
+  .eq('assigned_to', supabase.auth.currentUser!.id)
+  .neq('status', 'CLOSED')
+  .order('priority', ascending: false)
+  .order('created_at', ascending: false);
+
+if (response != null) {
+  final incidents = response as List<dynamic>;
+  // Actualizar UI con las incidencias
+}
+```
+
+**⚡ Performance: RLS Optimizado (Schema v3.2)**
+> Las RLS policies usan el patrón `(select auth.uid())` en lugar de `auth.uid()` directo. Esto cachea el resultado de `auth.uid()` por statement, logrando **99.94% de mejora de performance** según benchmarks de Supabase.
+>
+> **Ejemplo de policy aplicada:**
+> ```sql
+> CREATE POLICY "Users can view organization incidents"
+> ON incidents FOR SELECT
+> TO authenticated
+> USING ((select auth.jwt() ->> 'current_org_id')::uuid = organization_id);
+> ```
+
+**🎯 Best Practices:**
+- ✅ Especificar exactamente qué campos necesitas (evitar `select('*')`)
+- ✅ Usar filtros explícitos aunque RLS filtre automáticamente
+- ✅ Limitar resultados con `.limit(20)` para listados paginados
+- ✅ Usar foreign key names para joins específicos (ej: `project:projects`)
+
 #### Flujo de Datos: Suscripción Realtime para Nuevas Asignaciones
 
-1. **Establecer canal**: Crear suscripción a cambios de PostgreSQL.
-2. **Evento monitoreado**: Escuchar exclusivamente eventos UPDATE en tabla `incidents`.
-3. **Filtro estricto**: Restringir a registros donde `assigned_to` es igual al ID del usuario actual.
-4. **Al recibir evento**:
-   - Mostrar notificación local: "Nueva incidencia asignada"
-   - Refrescar lista de incidencias asignadas
+**⚠️ IMPORTANTE - Consideraciones de Performance:**
+> Postgres Changes tiene limitaciones de escala:
+> - Cada evento INSERT/UPDATE dispara evaluación de RLS policies por cada subscriber
+> - Con 100 usuarios = 100 "reads" por cada INSERT
+> - Procesamiento en single thread (upgrades de compute no ayudan mucho)
+> - Para >100 usuarios concurrentes, considerar **Broadcast** en lugar de Postgres Changes
+
+**Configuración de Realtime (Dart/Flutter):**
+```dart
+// 1. Habilitar Postgres Changes en la tabla desde Dashboard:
+// Settings > Replication > supabase_realtime publication
+// Agregar tabla 'incidents'
+
+// 2. Crear política RLS para permitir SELECT en incidents
+// (Ya existe en schema: permite SELECT si organization_id coincide)
+
+// 3. Establecer canal y suscripción con filtros server-side
+final channel = supabase
+  .channel('incident-changes') // Nombre único de canal
+  .onPostgresChanges(
+    event: PostgresChangeEvent.update, // Solo eventos UPDATE
+    schema: 'public',
+    table: 'incidents',
+    filter: PostgresChangeFilter(
+      type: PostgresChangeFilterType.eq,
+      column: 'assigned_to',
+      value: currentUserId, // Filtro server-side para reducir payload
+    ),
+    callback: (payload) {
+      // payload contiene:
+      // - eventType: 'UPDATE'
+      // - newRecord: Map con datos nuevos
+      // - oldRecord: Map con datos anteriores (si replica identity = full)
+      
+      final incident = payload.newRecord;
+      _showLocalNotification(
+        title: 'Nueva incidencia asignada',
+        body: incident['title'],
+      );
+      
+      // Actualizar estado local (setState, Provider, Riverpod, etc.)
+      _refreshIncidentsList();
+    },
+  )
+  .subscribe(); // Iniciar suscripción
+
+// 4. Cleanup al salir de la pantalla
+@override
+void dispose() {
+  channel.unsubscribe(); // Cancelar suscripción
+  super.dispose();
+}
+```
+
+**MEJORES PRÁCTICAS - Realtime Performance**:
+
+1. **Filtros del lado del servidor**: Usar `filter` en la suscripción reduce payload y carga en cliente
+2. **Unsubscribe al desmontar**: Siempre cancelar suscripciones para evitar memory leaks
+3. **Debounce de actualizaciones**: Si recibes muchos eventos, considera debouncing:
+   ```dart
+   Timer? _debounce;
+   void _onRealtimeEvent(payload) {
+     _debounce?.cancel();
+     _debounce = Timer(Duration(milliseconds: 300), () {
+       _refreshIncidentsList();
+     });
+   }
+   ```
+4. **Evitar múltiples suscripciones a la misma tabla**: Consolidar filtros en una sola suscripción cuando sea posible
+5. **Limitaciones de Postgres Changes**:
+   - DELETE events no son filtrables (limitación de Postgres WAL)
+   - Performance depende de RLS policies - usa patrón `(select auth.uid())` para cacheo
+   - Si necesitas alta escalabilidad, considera usar Broadcast en lugar de Postgres Changes
 
 **¿Por qué Realtime para asignaciones?**
 > Cumple el **Objetivo 3**: Cuando el D/A asigna una incidencia desde la web, el RESIDENT en campo ve la asignación instantáneamente sin refrescar.
@@ -296,22 +434,211 @@ La aplicación móvil de STROP está diseñada para **personal de campo** (Resid
 4. **Insertar incidencia**: Crear registro en tabla `incidents` con:
    - `project_id`: Proyecto seleccionado
    - `type`: Tipo de incidencia ('ORDER_INSTRUCTION', 'REQUEST_QUERY', 'CERTIFICATION', 'INCIDENT_NOTIFICATION')
-   - `description`: Texto descriptivo
+   - `title`: Título resumido
+   - `description`: Texto descriptivo (max 1000 chars)
    - `priority`: Prioridad (NORMAL o CRITICAL)
-   - `status`: Siempre 'OPEN' para nuevas
-   - Nota: `organization_id` y `created_by` se establecen automáticamente via trigger/RLS
+   - `location`: Ubicación específica en la obra (opcional)
+   - **⚡ Auto-poblados por triggers (Schema v3.2):**
+     - `organization_id`: Extraido automáticamente desde el proyecto
+     - `created_by`: Extraido automáticamente desde `auth.uid()`
+     - `status`: Default 'OPEN'
+     - `created_at`: Default NOW()
 5. **Registrar fotos en DB**: Para cada foto subida, insertar en tabla `photos` con:
    - `incident_id`: ID de la incidencia recién creada
    - `storage_path`: Ruta en Storage
-   - `organization_id`: ID del tenant
+   - **⚡ Auto-poblados por triggers:**
+     - `organization_id`: Extraido desde incident
+     - `uploaded_by`: Extraido desde `auth.uid()`
 6. **Confirmar éxito**: Mostrar mensaje y navegar a Home.
+
+**Código de ejemplo (Dart/Flutter):**
+```dart
+// 1. Subir fotos primero
+final uploadedPaths = <String>[];
+for (final photo in selectedPhotos) {
+  final path = await uploadPhotoResumable(photo, projectId, tempIncidentId);
+  if (path != null) uploadedPaths.add(path);
+}
+
+// 2. Insertar incidencia
+final response = await supabase.from('incidents').insert({
+  'project_id': selectedProjectId,
+  'type': selectedType, // 'INCIDENT_NOTIFICATION'
+  'title': titleController.text,
+  'description': descriptionController.text,
+  'priority': isPriorityCritical ? 'CRITICAL' : 'NORMAL',
+  'location': locationController.text,
+  // organization_id, created_by, status, created_at -> auto via triggers
+}).select().single();
+
+final incidentId = response['id'];
+
+// 3. Registrar fotos en DB
+for (final path in uploadedPaths) {
+  await supabase.from('photos').insert({
+    'incident_id': incidentId,
+    'storage_path': path,
+    // organization_id, uploaded_by -> auto via triggers
+  });
+}
+```
 
 #### Flujo de Datos: Upload de Fotos (Resumable)
 
-1. **Comprimir imagen**: Reducir calidad a 80% y ancho máximo a 1920px.
-2. **Generar path único**: Estructura: `{org_id}/{project_id}/{incident_id}/{uuid}.jpg`
-3. **Upload resumable**: Subir binario a bucket `incident-photos` con tipo MIME `image/jpeg`.
-4. **Retornar path**: Devolver el path para registrar en base de datos.
+**🔑 RECOMENDACIÓN:** Usar **Resumable Uploads** (TUS protocol) para mayor confiabilidad en conexiones inestables.
+
+**Ventajas de Resumable Upload:**
+- ✅ Resiliencia ante interrupciones de red
+- ✅ Progress tracking para mejor UX
+- ✅ Reintentos automáticos
+- ✅ Ideal para conexiones de campo
+
+**Implementación en Dart/Flutter con tus_client:**
+
+```dart
+import 'package:tus_client/tus_client.dart';
+
+Future<String?> uploadPhotoResumable(
+  File photoFile,
+  String projectId,
+  String incidentId,
+) async {
+  final session = supabase.auth.currentSession;
+  if (session == null) return null;
+  
+  final orgId = session.user.userMetadata?['current_org_id'];
+  final fileName = '${Uuid().v4()}.jpg';
+  final storagePath = '$orgId/$projectId/$incidentId/$fileName';
+  
+  try {
+    final client = TusClient(
+      Uri.parse(
+        'https://${SUPABASE_PROJECT_ID}.storage.supabase.co/storage/v1/upload/resumable',
+      ),
+      photoFile,
+      store: TusMemoryStore(), // O TusFileStore() para persistir progreso
+      headers: {
+        'Authorization': 'Bearer ${session.accessToken}',
+        'x-upsert': 'false',
+      },
+      metadata: {
+        'bucketName': 'incident-photos',
+        'objectName': storagePath,
+        'contentType': 'image/jpeg',
+        'cacheControl': '3600',
+      },
+      maxChunkSize: 6 * 1024 * 1024, // 6MB chunks
+    );
+
+    client.onProgress = (progress, total) {
+      final percentage = (progress / total * 100).toStringAsFixed(1);
+      print('Upload progress: $percentage%');
+      // Actualizar UI con progress bar
+    };
+
+    await client.upload();
+    return storagePath;
+  } catch (e) {
+    print('Upload failed: $e');
+    return null;
+  }
+}
+```
+
+**Upload Simple (Para archivos pequeños <6MB):**
+
+```dart
+Future<String?> uploadPhotoSimple(
+  File photoFile,
+  String projectId,
+  String incidentId,
+) async {
+  final session = supabase.auth.currentSession;
+  if (session == null) return null;
+  
+  final orgId = session.user.userMetadata?['current_org_id'];
+  final fileName = '${Uuid().v4()}.jpg';
+  final storagePath = '$orgId/$projectId/$incidentId/$fileName';
+  
+  try {
+    await supabase.storage.from('incident-photos').upload(
+      storagePath,
+      photoFile,
+      fileOptions: const FileOptions(
+        contentType: 'image/jpeg',
+        cacheControl: '3600',
+        upsert: false,
+      ),
+    );
+    return storagePath;
+  } catch (e) {
+    print('Upload failed: $e');
+    return null;
+  }
+}
+```
+
+**⚠️ Validaciones de Storage (Schema v3.2):**
+- **Máximo 5 fotos por incidencia**: Validado por trigger `validate_photo_count`
+- **Tamaño máximo 5MB**: Configurado en bucket policy
+- **Path consistency**: Trigger `validate_storage_path_organization` previene paths incorrectos
+- **MIME types permitidos**: `image/jpeg`, `image/png`, `image/webp`
+
+**🎯 Best Practices:**
+- ✅ Comprimir fotos antes de subir (max 1920px, calidad 80% JPEG)
+- ✅ Usar resumable upload para archivos >1MB
+- ✅ Implementar retry logic con backoff exponencial
+- ✅ Mostrar progress bar para mejor UX
+- ✅ Validar cantidad de fotos antes de subir (max 5)
+
+```dart
+import 'dart:io';
+import 'package:image_picker/image_picker.dart';
+import 'package:image/image.dart' as img;
+import 'package:uuid/uuid.dart';
+
+Future<String> uploadIncidentPhoto({
+  required String incidentId,
+  required String projectId,
+  required File photoFile,
+}) async {
+  // 1. Comprimir imagen antes de subir
+  final bytes = await photoFile.readAsBytes();
+  final image = img.decodeImage(bytes);
+  if (image == null) throw Exception('Error al procesar imagen');
+  
+  // Redimensionar a máximo 1920px de ancho
+  final resized = img.copyResize(image, width: 1920);
+  final compressed = img.encodeJpg(resized, quality: 80);
+  
+  // 2. Generar path único siguiendo estructura requerida
+  final orgId = supabase.auth.currentSession?.user.userMetadata?['current_org_id'];
+  final fileName = '${const Uuid().v4()}.jpg';
+  final storagePath = '$orgId/$projectId/$incidentId/$fileName';
+  
+  // 3. Upload con validación de RLS
+  // RLS Policy valida: bucket_id = 'incident-photos' AND organization_id del path coincide con JWT
+  await supabase.storage
+      .from('incident-photos')
+      .uploadBinary(
+        storagePath,
+        compressed,
+        fileOptions: FileOptions(
+          contentType: 'image/jpeg',
+          upsert: false, // No sobrescribir si existe
+        ),
+      );
+  
+  // 4. Retornar path para registro en DB
+  return storagePath;
+}
+```
+
+**Validaciones Automáticas**:
+- **Bucket limit**: Máximo 5MB por archivo (rechazado por Supabase)
+- **MIME types**: Solo `image/jpeg`, `image/png`, `image/webp` permitidos
+- **RLS Policy**: Valida que organization_id del path coincida con JWT claim
+- **Trigger**: `validate_photo_count` rechaza si ya hay 5 fotos en la incidencia
 
 **¿Por qué Resumable Upload?**
 > Cumple el **Objetivo 1**: En obras de construcción la señal de internet puede ser intermitente. El upload resumable permite pausar y continuar la subida sin perder progreso.
@@ -321,7 +648,250 @@ La aplicación móvil de STROP está diseñada para **personal de campo** (Resid
 
 ---
 
-### 4. Detalle de Incidencia
+## 🔒 SEGURIDAD Y RLS (ROW LEVEL SECURITY)
+
+### Políticas RLS Aplicadas en Mobile
+
+Todas las operaciones de la app móvil están protegidas por RLS policies definidas en el schema SQL. El JWT del usuario autenticado se evalúa automáticamente en cada query.
+
+#### Tabla `incidents`
+
+**SELECT Policy** - Ver solo incidencias de mi organización:
+```sql
+CREATE POLICY "Users can view incidents in their org"
+ON incidents FOR SELECT
+TO authenticated
+USING (
+  organization_id = (select auth.jwt()->>'current_org_id')::UUID
+);
+```
+
+**INSERT Policy** - Crear incidencias en mi organización:
+```sql
+CREATE POLICY "Users can create incidents in their org"
+ON incidents FOR INSERT
+TO authenticated
+WITH CHECK (
+  -- Validar que el proyecto pertenece a mi org
+  EXISTS (
+    SELECT 1 FROM projects 
+    WHERE id = incidents.project_id 
+    AND organization_id = (select auth.jwt()->>'current_org_id')::UUID
+  )
+);
+```
+
+**UPDATE Policy** - Cerrar incidencias (RESIDENT+):
+```sql
+CREATE POLICY "Users can update incidents they created or are assigned to"
+ON incidents FOR UPDATE
+TO authenticated
+USING (
+  organization_id = (select auth.jwt()->>'current_org_id')::UUID
+  AND (
+    created_by = (SELECT id FROM users WHERE auth_id = (select auth.uid()))
+    OR assigned_to = (SELECT id FROM users WHERE auth_id = (select auth.uid()))
+    OR (auth.jwt()->>'current_org_role') IN ('OWNER', 'SUPERINTENDENT')
+  )
+);
+```
+
+#### Tabla `photos`
+
+**SELECT Policy** - Ver fotos de mi organización:
+```sql
+CREATE POLICY "Users can view photos in their org"
+ON photos FOR SELECT
+TO authenticated
+USING (organization_id = (select auth.jwt()->>'current_org_id')::UUID);
+```
+
+**INSERT Policy** - Subir fotos a incidencias de mi org:
+```sql
+CREATE POLICY "Users can upload photos to incidents in their org"
+ON photos FOR INSERT
+TO authenticated
+WITH CHECK (
+  EXISTS (
+    SELECT 1 FROM incidents
+    WHERE id = photos.incident_id
+    AND organization_id = (select auth.jwt()->>'current_org_id')::UUID
+  )
+);
+```
+
+### Storage RLS Policies
+
+**Bucket `incident-photos`** (privado):
+
+```sql
+-- Policy para upload
+CREATE POLICY "Users can upload to their org folder"
+ON storage.objects FOR INSERT
+TO authenticated
+WITH CHECK (
+  bucket_id = 'incident-photos' AND
+  (storage.foldername(name))[1] = (select auth.jwt()->>'current_org_id')
+);
+
+-- Policy para download (via signed URLs)
+CREATE POLICY "Users can download from their org folder"
+ON storage.objects FOR SELECT
+TO authenticated
+USING (
+  bucket_id = 'incident-photos' AND
+  (storage.foldername(name))[1] = (select auth.jwt()->>'current_org_id')
+);
+```
+
+### CRÍTICO - Validaciones Automáticas
+
+**Triggers de Seguridad**:
+
+1. **Auto-populate `organization_id`**: Triggers establecen automáticamente el org_id del JWT
+   ```sql
+   -- Trigger en incidents
+   CREATE TRIGGER set_incident_organization
+   BEFORE INSERT ON incidents
+   FOR EACH ROW
+   EXECUTE FUNCTION set_organization_from_project();
+   ```
+
+2. **Auto-populate `created_by` / `author_id`**: Se establece desde auth.uid()
+   ```sql
+   -- En trigger o RLS
+   created_by = (SELECT id FROM users WHERE auth_id = auth.uid())
+   ```
+
+3. **Validación de conteo de fotos**: Máximo 5 fotos por incidencia
+   ```sql
+   CREATE TRIGGER validate_photo_count
+   BEFORE INSERT ON photos
+   FOR EACH ROW
+   EXECUTE FUNCTION validate_max_photos();
+   ```
+
+**IMPORTANTE**: 
+- NUNCA confiar en datos del cliente para `organization_id` o `created_by`
+- Siempre usar JWT claims y triggers para establecer estos valores
+- Las RLS policies usan patrón `(select auth.uid())` para performance (caching)
+
+---
+
+## 📡 DATA API - CONSULTAS OPTIMIZADAS
+
+### Uso de PostgREST con Supabase Client
+
+La Data API de Supabase usa PostgREST que expone automáticamente la base de datos como REST API. Todas las consultas respetan RLS.
+
+#### Consultas Básicas
+
+**SELECT con relaciones (foreign keys)**:
+```dart
+// Obtener incidencias con datos del proyecto y fotos
+final response = await supabase
+    .from('incidents')
+    .select('''
+      *,
+      projects:project_id (
+        id,
+        name,
+        location
+      ),
+      photos (
+        id,
+        storage_path,
+        uploaded_at
+      ),
+      assigned_user:assigned_to (
+        id,
+        full_name,
+        role
+      )
+    ''')
+    .eq('status', 'OPEN')
+    .order('priority', ascending: false)
+    .order('created_at', ascending: false);
+
+final incidents = response as List;
+```
+
+**Filtros Avanzados**:
+```dart
+// Filtrar por múltiples condiciones
+final response = await supabase
+    .from('incidents')
+    .select('*')
+    .eq('project_id', projectId)
+    .in_('status', ['OPEN', 'ASSIGNED'])
+    .gte('created_at', DateTime.now().subtract(Duration(days: 30)).toIso8601String())
+    .or('priority.eq.CRITICAL,assigned_to.eq.$userId');
+```
+
+**Búsqueda Full-Text** (si se configura):
+```dart
+// Buscar en título y descripción
+final response = await supabase
+    .from('incidents')
+    .select('*')
+    .textSearch('title', 'tubería rota', config: 'spanish');
+```
+
+#### INSERT con Returning
+
+```dart
+// Crear incidencia y obtener ID generado
+final response = await supabase
+    .from('incidents')
+    .insert({
+      'project_id': projectId,
+      'type': 'INCIDENT_NOTIFICATION',
+      'title': 'Fuga en tubería',
+      'description': 'Fuga detectada en el tercer piso',
+      'priority': 'CRITICAL',
+      'location': 'Edificio A - Piso 3',
+    })
+    .select('id, created_at')
+    .single();
+
+final newIncidentId = response['id'];
+```
+
+#### UPDATE
+
+```dart
+// Cerrar incidencia (RLS valida permisos)
+await supabase
+    .from('incidents')
+    .update({
+      'status': 'CLOSED',
+      'closed_at': DateTime.now().toIso8601String(),
+      'closed_notes': 'Reparación completada',
+    })
+    .eq('id', incidentId);
+```
+
+### Performance Tips
+
+1. **Usar `.select()` específico**: No traer todos los campos si no son necesarios
+   ```dart
+   .select('id, title, status, created_at') // Más rápido que .select('*')
+   ```
+
+2. **Limitar resultados**: Usar `.limit()` y paginación
+   ```dart
+   .select('*').limit(50).range(0, 49) // Primera página de 50 items
+   ```
+
+3. **Índices en columnas filtradas**: El schema ya tiene índices en:
+   - `incidents.organization_id`
+   - `incidents.project_id`
+   - `incidents.status`
+   - `incidents.assigned_to`
+
+4. **Cachear en cliente**: Para datos que no cambian frecuentemente (proyectos, ENUMs)
+
+---
 
 **Propósito:** Ver información completa y agregar comentarios/cierre.
 
@@ -335,12 +905,95 @@ La aplicación móvil de STROP está diseñada para **personal de campo** (Resid
 
 #### Flujo de Datos: Suscripción Realtime para Comentarios
 
-1. **Establecer canal**: Crear suscripción específica para la incidencia actual.
-2. **Evento monitoreado**: Escuchar exclusivamente eventos INSERT en tabla `comments`.
-3. **Filtro estricto**: Restringir a registros donde `incident_id` es igual al ID de la incidencia visualizada.
-4. **Al recibir evento**:
-   - Parsear el nuevo comentario del payload
-   - Agregar al estado local de comentarios para actualizar UI inmediatamente
+**Implementación en Dart/Flutter**:
+
+```dart
+import 'package:supabase_flutter/supabase_flutter.dart';
+
+class IncidentDetailScreen extends StatefulWidget {
+  final String incidentId;
+  // ...
+}
+
+class _IncidentDetailScreenState extends State<IncidentDetailScreen> {
+  late RealtimeChannel _commentsChannel;
+  List<Comment> _comments = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadInitialComments();
+    _subscribeToComments();
+  }
+
+  Future<void> _loadInitialComments() async {
+    // Cargar comentarios existentes
+    final response = await supabase
+        .from('comments')
+        .select('*, users:author_id(full_name, role)')
+        .eq('incident_id', widget.incidentId)
+        .order('created_at', ascending: true);
+    
+    setState(() {
+      _comments = (response as List).map((e) => Comment.fromJson(e)).toList();
+    });
+  }
+
+  void _subscribeToComments() {
+    // Establecer suscripción Realtime con filtro específico
+    _commentsChannel = supabase
+        .channel('comments-${widget.incidentId}') // Canal único por incidencia
+        .onPostgresChanges(
+          event: PostgresChangeEvent.insert,
+          schema: 'public',
+          table: 'comments',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'incident_id',
+            value: widget.incidentId,
+          ),
+          callback: (payload) async {
+            // Nuevo comentario recibido (puede venir de Web o Mobile)
+            final newCommentData = payload.newRecord;
+            
+            // Fetch datos del autor (RLS permite SELECT si organization_id coincide)
+            final authorData = await supabase
+                .from('users')
+                .select('full_name, role')
+                .eq('id', newCommentData['author_id'])
+                .single();
+            
+            // Agregar al estado local
+            setState(() {
+              _comments.add(Comment.fromJson({
+                ...newCommentData,
+                'users': authorData,
+              }));
+            });
+            
+            // Scroll automático al nuevo comentario
+            _scrollToBottom();
+          },
+        )
+        .subscribe();
+  }
+
+  @override
+  void dispose() {
+    _commentsChannel.unsubscribe(); // CRÍTICO: Cleanup al salir
+    super.dispose();
+  }
+}
+```
+
+**RLS Policy Aplicada**:
+```sql
+-- Policy en comments permite SELECT si organization_id coincide
+CREATE POLICY "Users can view comments in their org"
+ON comments FOR SELECT
+TO authenticated
+USING ((select auth.jwt()->>'current_org_id')::UUID = organization_id);
+```
 
 **¿Por qué Realtime para comentarios?**
 > Cumple el **Objetivo 3**: Cuando el D/A comenta desde la web, el personal de campo ve la respuesta al instante. Comunicación bidireccional sin refrescar.

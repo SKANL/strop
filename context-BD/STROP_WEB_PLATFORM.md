@@ -194,14 +194,16 @@ La plataforma web de STROP está diseñada para **Dueños/Administradores (D/A)*
 | `organization_id` | UUID | NO | - | FK a organizations (para RLS) |
 | `project_id` | UUID | NO | - | FK a projects |
 | `type` | incident_type | NO | - | Tipo de incidencia |
-| `description` | TEXT | NO | - | Descripción (max 1000 chars) |
-| `priority` | incident_priority | NO | 'NORMAL' | Prioridad |
-| `status` | incident_status | NO | 'OPEN' | Estado actual |
+| `title` | VARCHAR(255) | NO | - | Título resumido de la incidencia |
+| `description` | TEXT | NO | - | Descripción detallada (max 1000 chars) |
+| `location` | VARCHAR(255) | SÍ | NULL | Ubicación específica en la obra |
+| `priority` | incident_priority | NO | 'NORMAL' | Prioridad (NORMAL o CRITICAL) |
+| `status` | incident_status | NO | 'OPEN' | Estado actual (OPEN → ASSIGNED → CLOSED) |
 | `created_by` | UUID | SÍ | NULL | FK a users (quién reportó) |
 | `assigned_to` | UUID | SÍ | NULL | FK a users (responsable asignado) |
 | `closed_at` | TIMESTAMPTZ | SÍ | NULL | Cuándo se cerró |
 | `closed_by` | UUID | SÍ | NULL | FK a users (quién cerró) |
-| `closed_notes` | TEXT | SÍ | NULL | Notas de cierre (max 1000 chars) |
+| `closed_notes` | TEXT | SÍ | NULL | Notas de cierre o resolución (max 1000 chars) |
 | `created_at` | TIMESTAMPTZ | NO | NOW() | Fecha de creación |
 
 **Constraints**:
@@ -242,15 +244,16 @@ La plataforma web de STROP está diseñada para **Dueños/Administradores (D/A)*
 | `id` | UUID | NO | uuid_generate_v4() | Identificador único |
 | `organization_id` | UUID | NO | - | FK a organizations |
 | `project_id` | UUID | NO | - | FK a projects |
-| `source` | event_source | NO | 'MANUAL' | Fuente del evento |
+| `source` | event_source | NO | 'MANUAL' | Fuente del evento (ALL, INCIDENT, MANUAL, MOBILE, SYSTEM) |
 | `title` | VARCHAR(255) | NO | - | Título de la entrada |
-| `content` | TEXT | NO | - | Contenido detallado |
-| `incident_id` | UUID | SÍ | NULL | FK a incidents (si aplica) |
-| `created_by` | UUID | SÍ | NULL | FK a users |
+| `content` | TEXT | NO | - | Contenido detallado de la entrada |
+| `metadata` | JSONB | NO | '{}' | Metadata flexible para datos adicionales |
+| `incident_id` | UUID | SÍ | NULL | FK a incidents (si la entrada está relacionada) |
+| `created_by` | UUID | SÍ | NULL | FK a users (quién creó la entrada) |
 | `created_at` | TIMESTAMPTZ | NO | NOW() | Fecha de creación |
-| `is_locked` | BOOLEAN | NO | FALSE | Si está bloqueada (día cerrado) |
-| `locked_at` | TIMESTAMPTZ | SÍ | NULL | Cuándo se bloqueó |
-| `locked_by` | UUID | SÍ | NULL | FK a users |
+| `is_locked` | BOOLEAN | NO | FALSE | Si está bloqueada por cierre de día |
+| `locked_at` | TIMESTAMPTZ | SÍ | NULL | Cuándo se bloqueó (solo lectura) |
+| `locked_by` | UUID | SÍ | NULL | FK a users (quién bloqueó) |
 
 #### 10. `bitacora_day_closures` - Cierres Diarios Inmutables
 
@@ -578,7 +581,139 @@ SELECT soft_delete_user('user-uuid-to-delete');
 | `/organizacion` | Nombre empresa, logo, plan | **Data API** + **Storage** | - |
 | Hub principal | QuotaIndicator, toggle tema | **Data API** | - |
 
-#### Flujo de Datos: QuotaIndicator (Uso de Recursos)
+#### Flujo de Datos: Realtime para Dashboard (Broadcast Recomendado)
+
+**⚠️ IMPORTANTE:** Para alta escala (>100 usuarios), usar **Broadcast** en lugar de Postgres Changes.
+
+**Postgres Changes (Para <100 usuarios):**
+
+```typescript
+import { useEffect, useState } from 'react'
+import { supabase } from '@/lib/supabase'
+
+export function useIncidentRealtime(projectId: string) {
+  const [incidents, setIncidents] = useState([])
+  
+  useEffect(() => {
+    const channel = supabase
+      .channel(`incidents:${projectId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*', // INSERT, UPDATE, DELETE
+          schema: 'public',
+          table: 'incidents',
+          filter: `project_id=eq.${projectId}` // Filtro server-side
+        },
+        (payload) => {
+          console.log('Incident changed:', payload)
+          // Refrescar lista de incidencias
+          fetchIncidents()
+        }
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [projectId])
+  
+  return incidents
+}
+```
+
+**Broadcast (Recomendado para escala):**
+
+```typescript
+// Client-side
+const channel = supabase
+  .channel(`incidents:${projectId}`, {
+    config: { private: true } // Requiere Realtime Authorization
+  })
+  .on('broadcast', { event: 'incident_created' }, (payload) => {
+    console.log('New incident:', payload)
+    setIncidents(prev => [payload.new, ...prev])
+  })
+  .on('broadcast', { event: 'incident_updated' }, (payload) => {
+    console.log('Updated incident:', payload)
+    setIncidents(prev => prev.map(i => 
+      i.id === payload.new.id ? payload.new : i
+    ))
+  })
+  .subscribe()
+```
+
+**Ventajas de Broadcast vs Postgres Changes:**
+- ✅ Mejor performance a escala (no evalúa RLS por subscriber)
+- ✅ Más flexible (custom payloads)
+- ✅ Menor carga en database
+- ⚠️ Requiere trigger en database para emitir eventos
+
+#### Flujo de Datos: Consulta de Incidencias con Filtros
+
+**⚡ Performance: Patrón RLS Optimizado (Schema v3.2)**
+
+Las RLS policies usan `(select auth.uid())` en lugar de `auth.uid()` directo para cachear el resultado:
+
+```sql
+-- Política aplicada en schema v3.2
+CREATE POLICY "Users can view organization incidents"
+ON incidents FOR SELECT
+TO authenticated
+USING ((select auth.jwt() ->> 'current_org_id')::uuid = organization_id);
+```
+
+Esto resulta en **99.94% de mejora de performance** según benchmarks de Supabase.
+
+**Implementación Client-Side (TypeScript):**
+
+```typescript
+// Dashboard - Consultar incidencias con filtros avanzados
+const { data: incidents, error } = await supabase
+  .from('incidents')
+  .select(`
+    id,
+    type,
+    title,
+    description,
+    priority,
+    status,
+    created_at,
+    created_by:users!incidents_created_by_fkey(
+      id,
+      full_name,
+      email
+    ),
+    assigned_to:users!incidents_assigned_to_fkey(
+      id,
+      full_name
+    ),
+    project:projects(
+      id,
+      name,
+      location
+    ),
+    photos(id, storage_path)
+  `)
+  .eq('project_id', selectedProjectId) // Filtro explícito
+  .in('status', ['OPEN', 'ASSIGNED'])  // Excluir cerradas
+  .order('priority', { ascending: false })
+  .order('created_at', { ascending: false })
+  .limit(50) // Paginación
+
+if (error) {
+  console.error('Error fetching incidents:', error)
+} else {
+  console.log('Incidents:', incidents)
+}
+```
+
+**🎯 Best Practices:**
+- ✅ Especificar campos exactos (evitar `select('*')`)
+- ✅ Usar foreign key names para joins (ej: `users!incidents_created_by_fkey`)
+- ✅ Agregar filtros explícitos aunque RLS filtre automáticamente
+- ✅ Limitar resultados con `.limit()` para paginación
+- ✅ Ordenar por múltiples campos para sorting consistente
 
 1. **Consultar límites de organización**: Obtener de tabla `organizations` los campos `storage_used_mb`, `storage_limit_mb`, `max_users`, `max_projects` filtrando estrictamente por `id` del tenant.
 2. **Contar usuarios activos**: Consultar tabla `users` contando registros donde `organization_id` coincide y `deleted_at` es NULL.
@@ -589,12 +724,119 @@ SELECT soft_delete_user('user-uuid-to-delete');
 
 ## 🔐 AUTENTICACIÓN Y AUTORIZACIÓN
 
-### Flujo de Auth
+### Flujo de Auth con SSR (Next.js/Framework SSR)
 
 ```
 ┌─────────────┐     ┌─────────────┐     ┌─────────────┐
 │ Login Form  │────▶│ Supabase    │────▶│ JWT Hook    │
 │ (email/pwd) │     │ Auth        │     │ (claims)    │
+└─────────────┴─────┴─────────────┴─────────────┘
+          │                           │
+          ▼                           ▼
+   ┌────────────────┐       ┌─────────────────┐
+   │ Session JWT   │       │ Custom Claims  │
+   │ + Cookies     │       │ - org_id       │
+   │ (HTTPOnly)    │       │ - user_role    │
+   └────────────────┘       └─────────────────┘
+```
+
+### SSR con Supabase Auth (Next.js)
+
+**⚡ IMPORTANTE:** Para aplicaciones SSR, usar `@supabase/ssr` en lugar de `@supabase/supabase-js`.
+
+**Implementación Server-Side (Next.js App Router):**
+
+```typescript
+// app/dashboard/page.tsx (Server Component)
+import { createServerClient } from '@supabase/ssr'
+import { cookies } from 'next/headers'
+import { redirect } from 'next/navigation'
+
+export default async function DashboardPage() {
+  const cookieStore = await cookies()
+  
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        get(name: string) {
+          return cookieStore.get(name)?.value
+        },
+      },
+    }
+  )
+
+  const { data: { session } } = await supabase.auth.getSession()
+  
+  if (!session) {
+    redirect('/login')
+  }
+
+  // Extraer custom claims del JWT
+  const orgId = session.user.user_metadata?.current_org_id
+  const orgRole = session.user.user_metadata?.current_org_role
+  
+  // Consultar datos en server-side
+  const { data: incidents } = await supabase
+    .from('incidents')
+    .select('*')
+    .order('created_at', { ascending: false })
+    .limit(10)
+
+  return (
+    <div>
+      <h1>Dashboard - {orgRole}</h1>
+      {/* Renderizar incidents */}
+    </div>
+  )
+}
+```
+
+**Ventajas de SSR con Supabase:**
+- ✅ SEO optimizado (contenido renderizado en servidor)
+- ✅ Performance mejorado (menos client-side JS)
+- ✅ Seguridad (cookies HTTPOnly)
+- ✅ RLS aplicado en server-side
+
+### Custom Access Token Hook (Schema v3.2)
+
+El schema incluye un hook que inyecta automáticamente contexto organizacional:
+
+```sql
+-- Ya implementado en schema v3.2
+CREATE OR REPLACE FUNCTION public.custom_access_token_hook(event jsonb)
+RETURNS jsonb AS $$
+DECLARE
+  claims jsonb;
+  current_org_id uuid;
+  current_org_role public.user_role;
+BEGIN
+  -- Extraer organización y rol del usuario
+  SELECT u.current_organization_id, om.role
+  INTO current_org_id, current_org_role
+  FROM public.users u
+  LEFT JOIN public.organization_members om 
+    ON om.user_id = u.id 
+    AND om.organization_id = u.current_organization_id
+  WHERE u.id = (event->>'user_id')::uuid;
+
+  -- Inyectar en JWT
+  claims := event->'claims';
+  IF current_org_id IS NOT NULL THEN
+    claims := jsonb_set(claims, '{current_org_id}', to_jsonb(current_org_id));
+    claims := jsonb_set(claims, '{current_org_role}', to_jsonb(current_org_role));
+  END IF;
+
+  RETURN jsonb_set(event, '{claims}', claims);
+END;
+$$ LANGUAGE plpgsql STABLE;
+```
+
+**Beneficios:**
+- ✅ No necesitas queries adicionales para obtener `org_id` y `role`
+- ✅ RLS policies pueden usar `auth.jwt() ->> 'current_org_id'`
+- ✅ Contexto siempre disponible en cada request
 └─────────────┘     └─────────────┘     └─────────────┘
                                                │
                     ┌──────────────────────────┘
