@@ -3,7 +3,6 @@ strop_web_admin/
 _nousar-strop_app_old/
 
 # Documentation context references
-context-BD/
 
 # Node modules and dependencies
 node_modules/
