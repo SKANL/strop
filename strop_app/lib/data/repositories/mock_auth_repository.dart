@@ -34,7 +34,6 @@ class MockAuthRepository implements AuthRepository {
     required String email,
     required String password,
     required String fullName,
-    required String organizationName,
   }) async {
     await Future<void>.delayed(const Duration(seconds: 3));
     if (email.contains('existe')) {

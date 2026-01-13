@@ -103,7 +103,7 @@ class _LoginPageState extends State<LoginPage> {
                       ),
                       const SizedBox(height: 24),
                       const Text(
-                        'STROP SaaS',
+                        'STROP',
                         style: TextStyle(
                           color: Colors.white,
                           fontSize: 32,
@@ -275,7 +275,7 @@ class _LoginPageState extends State<LoginPage> {
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           const Text(
-                            '¿No tienes cuenta?',
+                            '¿Eres nuevo?',
                             style: TextStyle(color: Colors.white70),
                           ),
                           TextButton(
@@ -286,7 +286,7 @@ class _LoginPageState extends State<LoginPage> {
                                 fontWeight: FontWeight.bold,
                               ),
                             ),
-                            child: const Text('Regístrate gratis'),
+                            child: const Text('Crear cuenta de empleado'),
                           ),
                         ],
                       ),

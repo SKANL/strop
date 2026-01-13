@@ -21,17 +21,15 @@ class AuthRegisterRequested extends AuthEvent {
   final String email;
   final String password;
   final String fullName;
-  final String organizationName;
 
   const AuthRegisterRequested({
     required this.email,
     required this.password,
     required this.fullName,
-    required this.organizationName,
   });
 
   @override
-  List<Object> get props => [email, password, fullName, organizationName];
+  List<Object> get props => [email, password, fullName];
 }
 
 class AuthLogoutRequested extends AuthEvent {}

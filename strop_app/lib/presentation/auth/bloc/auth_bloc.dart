@@ -41,7 +41,6 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         email: event.email,
         password: event.password,
         fullName: event.fullName,
-        organizationName: event.organizationName,
       );
 
       _logger.d('AuthBloc: Registration successful, attempting auto-login');

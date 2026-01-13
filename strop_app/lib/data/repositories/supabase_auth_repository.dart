@@ -14,6 +14,7 @@ class SupabaseAuthRepository implements AuthRepository {
     try {
       print('STROP_LOG: Attempting login for: $email');
       _logger.i('Attempting login for: $email');
+
       final response = await _supabase.auth.signInWithPassword(
         email: email,
         password: password,
@@ -21,26 +22,73 @@ class SupabaseAuthRepository implements AuthRepository {
 
       if (response.user == null) {
         _logger.e('Login failed: User is null after signInWithPassword');
-        throw Exception('Login failed: User is null');
+        throw Exception('No se pudo iniciar sesión. Intenta nuevamente.');
       }
 
       _logger.i('Login successful. User ID: ${response.user!.id}');
       return _mapUser(response.user!);
-    } catch (e, stack) {
-      _logger.e('Login exception', error: e, stackTrace: stack);
-      if (e is AuthException) {
-        if (e.message.contains('Invalid login credentials')) {
-          throw Exception(
-            'Credenciales incorrectas. Verifica tu correo y contraseña.',
-          );
-        } else if (e.message.contains('Email not confirmed')) {
-          throw Exception(
-            'Correo no confirmado. Por favor revisa tu bandeja de entrada.',
-          );
-        }
-        throw Exception(e.message);
+    } on AuthException catch (e, stack) {
+      _logger.e('Auth exception during login', error: e, stackTrace: stack);
+      print('STROP_LOG: Auth Error: ${e.message}');
+
+      // Specific AuthException handling
+      if (e.message.contains('Invalid login credentials')) {
+        throw Exception(
+          'Credenciales incorrectas. Verifica tu correo y contraseña.',
+        );
+      } else if (e.message.contains('Email not confirmed')) {
+        throw Exception(
+          'Correo no confirmado. Por favor revisa tu bandeja de entrada.',
+        );
+      } else if (e.message.contains('User not found')) {
+        throw Exception(
+          'No existe una cuenta con este correo. Regístrate primero.',
+        );
+      } else if (e.message.contains('Too many requests')) {
+        throw Exception(
+          'Demasiados intentos fallidos. Espera unos minutos e intenta nuevamente.',
+        );
+      } else if (e.message.contains('Email rate limit exceeded')) {
+        throw Exception(
+          'Demasiados intentos. Espera unos minutos e intenta nuevamente.',
+        );
+      } else {
+        throw Exception('Error de autenticación: ${e.message}');
       }
-      rethrow;
+    } catch (e, stack) {
+      _logger.e(
+        'Unexpected exception during login',
+        error: e,
+        stackTrace: stack,
+      );
+      print('STROP_LOG: Unexpected Error: $e');
+
+      // Network errors
+      if (e.toString().contains('SocketException') ||
+          e.toString().contains('Failed host lookup')) {
+        throw Exception(
+          'Sin conexión a internet. Verifica tu conexión y vuelve a intentar.',
+        );
+      } else if (e.toString().contains('TimeoutException') ||
+          e.toString().contains('timed out')) {
+        throw Exception(
+          'La conexión tardó demasiado. Verifica tu conexión e intenta nuevamente.',
+        );
+      } else if (e.toString().contains('ClientException')) {
+        throw Exception(
+          'Error de conexión. Verifica tu red e intenta nuevamente.',
+        );
+      }
+
+      // If it's already an Exception with a message, rethrow it
+      if (e is Exception) {
+        rethrow;
+      }
+
+      // Generic fallback
+      throw Exception(
+        'Error inesperado al iniciar sesión. Por favor intenta nuevamente.',
+      );
     }
   }
 
@@ -49,13 +97,10 @@ class SupabaseAuthRepository implements AuthRepository {
     required String email,
     required String password,
     required String fullName,
-    required String organizationName,
   }) async {
     try {
-      print(
-        'STROP_LOG: Attempting registration for: $email, Org: $organizationName',
-      );
-      _logger.i('Attempting registration for: $email, Org: $organizationName');
+      print('STROP_LOG: Attempting registration for: $email');
+      _logger.i('Attempting registration for: $email');
 
       // 1. Sign Up
       final authResponse = await _supabase.auth.signUp(
@@ -66,37 +111,95 @@ class SupabaseAuthRepository implements AuthRepository {
 
       if (authResponse.user == null) {
         _logger.e('Registration failed: User is null in authResponse');
-        throw Exception('Registration failed: User is null');
+        throw Exception('No se pudo crear la cuenta. Intenta nuevamente.');
       }
 
       final userId = authResponse.user!.id;
       print('STROP_LOG: User created in Auth. ID: $userId');
       _logger.i('User created in Auth. ID: $userId');
 
-      // 2. Initialize Owner Organization via RPC
-      print('STROP_LOG: Calling RPC: initialize_owner_organization');
-      _logger.i('Calling RPC: initialize_owner_organization');
-
-      await _supabase.rpc<void>(
-        'initialize_owner_organization',
-        params: {
-          'org_name': organizationName,
-          'plan_type': 'PROFESSIONAL',
-        },
+      // Note: Trigger 'handle_new_user' in DB will automatically assign organization
+      // if an invitation exists for this email.
+    } on AuthException catch (e, stack) {
+      _logger.e(
+        'Auth exception during registration',
+        error: e,
+        stackTrace: stack,
       );
+      print('STROP_LOG: Auth Error: ${e.message}');
 
-      print('STROP_LOG: RPC execution successful. Organization created.');
-      _logger.i('RPC execution successful. Organization created.');
-    } catch (e, stack) {
-      _logger.e('Registration exception', error: e, stackTrace: stack);
-      print('STROP_LOG: Registration Error: $e');
-
-      if (e is PostgrestException) {
-        throw Exception('Database Error: ${e.message}');
-      } else if (e is AuthException) {
-        throw Exception('Auth Error: ${e.message}');
+      // Specific AuthException handling
+      if (e.message.contains('User already registered')) {
+        throw Exception(
+          'Este correo ya está registrado. Intenta iniciar sesión.',
+        );
+      } else if (e.message.contains('Password should be at least')) {
+        throw Exception(
+          'La contraseña debe tener al menos 6 caracteres.',
+        );
+      } else if (e.message.contains('Invalid email')) {
+        throw Exception(
+          'El formato del correo electrónico no es válido.',
+        );
+      } else if (e.message.contains('Email rate limit exceeded')) {
+        throw Exception(
+          'Demasiados intentos. Espera unos minutos e intenta nuevamente.',
+        );
+      } else if (e.message.contains('Signup disabled')) {
+        throw Exception(
+          'El registro está temporalmente deshabilitado. Contacta al administrador.',
+        );
+      } else {
+        throw Exception('Error de autenticación: ${e.message}');
       }
-      throw Exception('Registration Error: $e');
+    } on PostgrestException catch (e, stack) {
+      _logger.e(
+        'Database exception during registration',
+        error: e,
+        stackTrace: stack,
+      );
+      print('STROP_LOG: Database Error: ${e.message}');
+
+      if (e.message.contains('duplicate key')) {
+        throw Exception(
+          'Este correo ya está registrado. Intenta iniciar sesión.',
+        );
+      } else if (e.message.contains('violates check constraint')) {
+        throw Exception(
+          'Los datos ingresados no cumplen con los requisitos.',
+        );
+      } else {
+        throw Exception('Error de base de datos: ${e.message}');
+      }
+    } catch (e, stack) {
+      _logger.e(
+        'Unexpected exception during registration',
+        error: e,
+        stackTrace: stack,
+      );
+      print('STROP_LOG: Unexpected Error: $e');
+
+      // Network errors
+      if (e.toString().contains('SocketException') ||
+          e.toString().contains('Failed host lookup')) {
+        throw Exception(
+          'Sin conexión a internet. Verifica tu conexión y vuelve a intentar.',
+        );
+      } else if (e.toString().contains('TimeoutException') ||
+          e.toString().contains('timed out')) {
+        throw Exception(
+          'La conexión tardó demasiado. Verifica tu conexión e intenta nuevamente.',
+        );
+      } else if (e.toString().contains('ClientException')) {
+        throw Exception(
+          'Error de conexión. Verifica tu red e intenta nuevamente.',
+        );
+      }
+
+      // Generic fallback
+      throw Exception(
+        'Error inesperado al registrarse. Por favor intenta nuevamente.',
+      );
     }
   }
 

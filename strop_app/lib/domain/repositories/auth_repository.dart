@@ -6,7 +6,6 @@ abstract class AuthRepository {
     required String email,
     required String password,
     required String fullName,
-    required String organizationName,
   });
   Future<void> logout();
   Future<User?> getCurrentUser();
