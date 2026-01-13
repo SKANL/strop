@@ -95,7 +95,7 @@ class MainShellPage extends StatelessWidget {
         notchMargin: 8,
         color: Colors.transparent,
         elevation: 0,
-        height: 64,
+        height: 80,
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceAround,
           children: [

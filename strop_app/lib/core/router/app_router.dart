@@ -5,12 +5,19 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import 'package:strop_app/presentation/auth/pages/login_page.dart';
+import 'package:strop_app/presentation/auth/pages/register_page.dart';
+import 'package:strop_app/presentation/auth/pages/forgot_password_page.dart';
 import 'package:strop_app/presentation/home/pages/home_page.dart';
 import 'package:strop_app/presentation/incidents/pages/create_incident_page.dart';
 import 'package:strop_app/presentation/incidents/pages/incident_detail_page.dart';
+import 'package:strop_app/presentation/profile/pages/organization_page.dart';
+import 'package:strop_app/presentation/profile/pages/profile_page.dart';
+import 'package:strop_app/presentation/profile/pages/users_page.dart';
 import 'package:strop_app/presentation/projects/pages/project_detail_page.dart';
 import 'package:strop_app/presentation/projects/pages/projects_list_page.dart';
 import 'package:strop_app/presentation/shell/pages/main_shell_page.dart';
+import 'package:strop_app/presentation/tasks/pages/tasks_page.dart';
+import 'package:strop_app/presentation/notifications/pages/notifications_page.dart';
 
 /// App router configuration following DEVELOPMENT_RULES.md go_router patterns
 class AppRouter {
@@ -22,7 +29,7 @@ class AppRouter {
   /// Main router instance
   static final GoRouter router = GoRouter(
     navigatorKey: _rootNavigatorKey,
-    initialLocation: '/home',
+    initialLocation: '/login',
     debugLogDiagnostics: true,
     routes: [
       // Auth routes (outside shell)
@@ -30,6 +37,16 @@ class AppRouter {
         path: '/login',
         name: 'login',
         builder: (context, state) => const LoginPage(),
+      ),
+      GoRoute(
+        path: '/register',
+        name: 'register',
+        builder: (context, state) => const RegisterPage(),
+      ),
+      GoRoute(
+        path: '/forgot-password',
+        name: 'forgot-password',
+        builder: (context, state) => const ForgotPasswordPage(),
       ),
 
       // Main app shell with bottom navigation
@@ -91,9 +108,7 @@ class AppRouter {
               GoRoute(
                 path: '/tasks',
                 name: 'tasks',
-                builder: (context, state) => const _PlaceholderPage(
-                  title: 'Mis Tareas',
-                ),
+                builder: (context, state) => const TasksPage(),
               ),
             ],
           ),
@@ -104,9 +119,26 @@ class AppRouter {
               GoRoute(
                 path: '/settings',
                 name: 'settings',
-                builder: (context, state) => const _PlaceholderPage(
-                  title: 'Configuración',
-                ),
+                builder: (context, state) => const ProfilePage(),
+                routes: [
+                  GoRoute(
+                    path: 'organization',
+                    name: 'organization',
+                    builder: (context, state) => const OrganizationPage(),
+                    routes: [
+                      GoRoute(
+                        path: 'users',
+                        name: 'organization-users',
+                        builder: (context, state) => const UsersPage(),
+                      ),
+                    ],
+                  ),
+                  GoRoute(
+                    path: 'notifications',
+                    name: 'notifications',
+                    builder: (context, state) => const NotificationsPage(),
+                  ),
+                ],
               ),
             ],
           ),
@@ -128,46 +160,6 @@ class AppRouter {
     // Error handling
     errorBuilder: (context, state) => _ErrorPage(error: state.error),
   );
-}
-
-/// Placeholder page for unimplemented routes
-class _PlaceholderPage extends StatelessWidget {
-  const _PlaceholderPage({required this.title});
-
-  final String title;
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: Text(title)),
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.construction,
-              size: 64,
-              color: Theme.of(context).colorScheme.primary.withValues(
-                alpha: 0.5,
-              ),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              title,
-              style: Theme.of(context).textTheme.headlineMedium,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Próximamente',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 }
 
 /// Error page for navigation errors

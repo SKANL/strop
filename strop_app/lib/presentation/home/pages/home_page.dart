@@ -14,7 +14,8 @@ import 'package:strop_app/core/theme/app_shadows.dart';
 import 'package:strop_app/data/datasources/local/mock_data.dart';
 import 'package:strop_app/domain/entities/entities.dart';
 import 'package:strop_app/presentation/home/widgets/sync_status_indicator.dart';
-import 'package:strop_app/presentation/home/widgets/task_summary_card.dart';
+import 'package:strop_app/presentation/shared/widgets/strop_action_button.dart';
+import 'package:strop_app/presentation/shared/widgets/strop_dashboard_card.dart';
 
 /// Home page with smart feed dashboard
 class HomePage extends StatelessWidget {
@@ -31,36 +32,30 @@ class HomePage extends StatelessWidget {
           // TODO(developer): Refresh data from repository
           await Future<void>.delayed(const Duration(seconds: 1));
         },
-        child: CustomScrollView(
-          slivers: [
-            // Header with user greeting
-            SliverToBoxAdapter(
-              child: _buildHeader(context, user),
-            ),
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // Header with user greeting
+              _buildHeader(context, user),
 
-            // Summary cards
-            SliverToBoxAdapter(
-              child: _buildSummarySection(context, summary),
-            ),
+              // Summary cards
+              _buildSummarySection(context, summary),
 
-            // Quick access buttons
-            SliverToBoxAdapter(
-              child: _buildQuickAccess(context),
-            ),
+              // Quick access buttons
+              _buildQuickAccess(context),
 
-            // Recent activity
-            SliverToBoxAdapter(
-              child: _buildRecentActivityHeader(context),
-            ),
+              // Recent activity header
+              _buildRecentActivityHeader(context),
 
-            // Activity list
-            _buildActivityList(context),
+              // Activity list
+              _buildActivityList(context),
 
-            // Bottom padding
-            const SliverToBoxAdapter(
-              child: SizedBox(height: 100),
-            ),
-          ],
+              // Bottom padding for FAB and safe area
+              const SizedBox(height: 100),
+            ],
+          ),
         ),
       ),
     );
@@ -158,7 +153,7 @@ class HomePage extends StatelessWidget {
           Row(
             children: [
               Expanded(
-                child: TaskSummaryCard(
+                child: StropDashboardCard(
                   title: 'Pendientes',
                   count: summary['pendingTasks'] ?? 0,
                   color: AppColors.statusOpen,
@@ -168,7 +163,7 @@ class HomePage extends StatelessWidget {
               ),
               const SizedBox(width: 12),
               Expanded(
-                child: TaskSummaryCard(
+                child: StropDashboardCard(
                   title: 'Críticas',
                   count: summary['criticalTasks'] ?? 0,
                   color: AppColors.priorityCritical,
@@ -189,7 +184,7 @@ class HomePage extends StatelessWidget {
       child: Row(
         children: [
           Expanded(
-            child: _QuickAccessButton(
+            child: StropActionButton(
               icon: Icons.mic,
               label: 'Nota de voz',
               color: AppColors.primary,
@@ -200,7 +195,7 @@ class HomePage extends StatelessWidget {
           ),
           const SizedBox(width: 12),
           Expanded(
-            child: _QuickAccessButton(
+            child: StropActionButton(
               icon: Icons.qr_code_scanner,
               label: 'Escanear QR',
               color: AppColors.accent,
@@ -243,14 +238,15 @@ class HomePage extends StatelessWidget {
   Widget _buildActivityList(BuildContext context) {
     final incidents = MockDataService.openIncidents.take(5).toList();
 
-    return SliverList(
-      delegate: SliverChildBuilderDelegate(
-        (context, index) {
-          final incident = incidents[index];
-          return _buildActivityItem(context, incident);
-        },
-        childCount: incidents.length,
-      ),
+    return ListView.builder(
+      physics: const NeverScrollableScrollPhysics(),
+      shrinkWrap: true,
+      itemCount: incidents.length,
+      padding: EdgeInsets.zero,
+      itemBuilder: (context, index) {
+        final incident = incidents[index];
+        return _buildActivityItem(context, incident);
+      },
     );
   }
 
@@ -357,53 +353,6 @@ class HomePage extends StatelessWidget {
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-/// Quick access button widget
-class _QuickAccessButton extends StatelessWidget {
-  const _QuickAccessButton({
-    required this.icon,
-    required this.label,
-    required this.color,
-    required this.onTap,
-  });
-
-  final IconData icon;
-  final String label;
-  final Color color;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
-      // Minimum 48dp touch target per UX.md
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.1),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: color.withValues(alpha: 0.3)),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, color: color, size: 20),
-            const SizedBox(width: 8),
-            Text(
-              label,
-              style: TextStyle(
-                color: color,
-                fontWeight: FontWeight.w600,
-                fontSize: 14,
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }

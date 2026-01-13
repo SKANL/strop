@@ -2,7 +2,7 @@
 // ignore_for_file: prefer_const_constructors
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:strop_app/app/app.dart';
+import 'package:strop_app/app/view/app.dart';
 import 'package:strop_app/counter/counter.dart';
 
 void main() {

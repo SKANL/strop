@@ -5,7 +5,7 @@
 // - Handle indicator
 // - Title + subtitle
 // - List of user's projects
-// - On select: shows QuickIncidentTypeSelector
+// - On select: shows QuickIncidentTypeSelector OR executes custom callback
 
 import 'dart:async';
 import 'package:flutter/material.dart';
@@ -16,14 +16,16 @@ import 'package:strop_app/data/datasources/local/mock_data.dart';
 import 'package:strop_app/domain/entities/entities.dart';
 import 'package:strop_app/presentation/shell/widgets/quick_incident_type_selector.dart';
 
-/// Bottom sheet for selecting a project before creating incident
+/// Bottom sheet for selecting a project
 class ProjectSelectorBottomSheet extends StatelessWidget {
   const ProjectSelectorBottomSheet({
     required this.parentContext,
+    this.onProjectSelected,
     super.key,
   });
 
   final BuildContext parentContext;
+  final void Function(Project)? onProjectSelected;
 
   @override
   Widget build(BuildContext context) {
@@ -65,7 +67,7 @@ class ProjectSelectorBottomSheet extends StatelessWidget {
 
           // Subtitle
           Text(
-            'Elige el proyecto para crear el reporte',
+            'Elige el proyecto',
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
               color: AppColors.textSecondary,
             ),
@@ -141,7 +143,7 @@ class ProjectSelectorBottomSheet extends StatelessWidget {
 
   Widget _buildProjectOption(BuildContext context, Project project) {
     return InkWell(
-      onTap: () => _onProjectSelected(context, project),
+      onTap: () => _handleSelection(context, project),
       borderRadius: BorderRadius.circular(12),
       child: Container(
         padding: const EdgeInsets.all(16),
@@ -220,11 +222,16 @@ class ProjectSelectorBottomSheet extends StatelessWidget {
     );
   }
 
-  void _onProjectSelected(BuildContext context, Project project) {
+  void _handleSelection(BuildContext context, Project project) {
     // Close this bottom sheet
     Navigator.pop(context);
 
-    // Show incident type selector after a small delay
+    if (onProjectSelected != null) {
+      onProjectSelected!(project);
+      return;
+    }
+
+    // Default behavior: Show incident type selector
     Future.delayed(const Duration(milliseconds: 200), () {
       if (!parentContext.mounted) return;
 

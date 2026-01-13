@@ -101,6 +101,9 @@ abstract class AppShadows {
   /// Default card shadow
   static List<BoxShadow> get card => medium;
 
+  /// Hover/Interactive card shadow
+  static List<BoxShadow> get cardHover => large;
+
   /// Elevated card (selected, active)
   static List<BoxShadow> get cardElevated => large;
 

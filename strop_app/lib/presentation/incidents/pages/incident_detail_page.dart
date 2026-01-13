@@ -260,18 +260,6 @@ class IncidentDetailPage extends StatelessWidget {
         ],
       ),
 
-      // Close incident FAB (only show if open)
-      floatingActionButton: !incident.isClosed
-          ? FloatingActionButton.extended(
-              onPressed: () {
-                // TODO(developer): Close incident dialog
-              },
-              backgroundColor: AppColors.success,
-              icon: const Icon(Icons.check),
-              label: const Text('Cerrar incidencia'),
-            )
-          : null,
-
       // Comment input
       bottomSheet: Container(
         padding: EdgeInsets.fromLTRB(

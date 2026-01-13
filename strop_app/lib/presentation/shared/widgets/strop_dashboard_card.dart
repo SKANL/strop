@@ -1,5 +1,5 @@
-// Task Summary Card Widget
-// lib/presentation/home/widgets/task_summary_card.dart
+// Strop Dashboard Card Widget
+// lib/presentation/shared/widgets/strop_dashboard_card.dart
 
 import 'package:flutter/material.dart';
 
@@ -7,8 +7,8 @@ import 'package:strop_app/core/theme/app_colors.dart';
 import 'package:strop_app/core/theme/app_shadows.dart';
 
 /// Summary card showing count of tasks with colored accent
-class TaskSummaryCard extends StatelessWidget {
-  const TaskSummaryCard({
+class StropDashboardCard extends StatelessWidget {
+  const StropDashboardCard({
     required this.title,
     required this.count,
     required this.color,
