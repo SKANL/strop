@@ -223,18 +223,24 @@ class ProjectSelectorBottomSheet extends StatelessWidget {
   }
 
   void _handleSelection(BuildContext context, Project project) {
-    // Close this bottom sheet
-    Navigator.pop(context);
-
     if (onProjectSelected != null) {
+      // Custom callback provided - close and execute
+      Navigator.pop(context);
       onProjectSelected!(project);
       return;
     }
 
-    // Default behavior: Show incident type selector
-    Future.delayed(const Duration(milliseconds: 200), () {
+    // Default behavior: Close this sheet and open incident type selector
+    // Use Navigator.pop to properly close, then wait for animation to complete
+    Navigator.pop(context);
+
+    // Wait for the bottom sheet close animation to complete
+    // This ensures the context is properly cleaned up before opening the next sheet
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      // Double-check that the parent context is still mounted
       if (!parentContext.mounted) return;
 
+      // Open the incident type selector
       unawaited(
         showModalBottomSheet<void>(
           context: parentContext,
