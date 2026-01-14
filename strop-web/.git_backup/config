@@ -1,0 +1,13 @@
+[core]
+	repositoryformatversion = 0
+	filemode = false
+	bare = false
+	logallrefupdates = true
+	symlinks = false
+	ignorecase = true
+[branch "main"]
+	gk-last-accessed = 2026-01-13T17:40:05.008Z
+	gk-last-modified = 2026-01-13T17:40:05.008Z
+[remote "origin"]
+	url = https://github.com/SKANL/strop.git
+	fetch = +refs/heads/*:refs/remotes/origin/*

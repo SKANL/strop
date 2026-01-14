@@ -1,0 +1,6 @@
+0000000000000000000000000000000000000000 a0c2ca61afc984ae4a6e3769abaf2536202672a9 LoffyDev <24090249@alumno.utmetropolitana.edu.mx> 1768102315 -0600	commit (initial): Initial commit from Create Next App
+a0c2ca61afc984ae4a6e3769abaf2536202672a9 a9bc86f6348bcb8b169aaf0295e7c67adcd772f2 LoffyDev <24090249@alumno.utmetropolitana.edu.mx> 1768131195 -0600	commit: fix(ui): eliminate duplicate headers and sidebars from dashboard pages
+a9bc86f6348bcb8b169aaf0295e7c67adcd772f2 41209d54b1a0f7cc51c7a5c5a496743f7c31c291 LoffyDev <24090249@alumno.utmetropolitana.edu.mx> 1768249927 -0600	commit: documentos actualizados
+41209d54b1a0f7cc51c7a5c5a496743f7c31c291 7cf4e0ae73fa4cbee73ed712df3041772ce33303 LoffyDev <24090249@alumno.utmetropolitana.edu.mx> 1768294221 -0600	commit: proyectos y dasboar conectados al backend y consumiendo de forma desacoplada
+7cf4e0ae73fa4cbee73ed712df3041772ce33303 36afb47ea0077cda76ffb5edf8832cd1a650a342 LoffyDev <24090249@alumno.utmetropolitana.edu.mx> 1768305145 -0600	commit: proyectos y dasboar conectados al backend y consumiendo de forma desacoplada
+36afb47ea0077cda76ffb5edf8832cd1a650a342 0ef3c93f31f374b999a55d3858de68749543be6b LoffyDev <24090249@alumno.utmetropolitana.edu.mx> 1768325854 -0600	commit: se agrgo la funcion de mapa al dashboard y sugerencias de direcciones al momento de crear un proyecto
