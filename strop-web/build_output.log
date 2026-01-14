@@ -1,0 +1,24 @@
+
+> strop-web@0.1.0 build
+> next build
+
+▲ Next.js 16.1.1 (Turbopack)
+- Environments: .env.local
+
+⚠ The "middleware" file convention is deprecated. Please use "proxy" instead. Learn more: https://nextjs.org/docs/messages/middleware-to-proxy
+  Creating an optimized production build ...
+✓ Compiled successfully in 7.7s
+  Running TypeScript ...
+Failed to compile.
+
+./src/app/actions/projects.actions.ts:80:7
+Type error: Object literal may only specify known properties, and 'description' does not exist in type '{ created_at?: string | null | undefined; created_by?: string | null | undefined; end_date: string; id?: string | undefined; location: string; name: string; organization_id: string; owner_id?: string | ... 1 more ... | undefined; start_date: string; status?: "ACTIVE" | ... 3 more ... | undefined; updated_at?: string...'.
+
+  78 |       name: name.trim(),
+  79 |       location: location.trim(),
+> 80 |       description: description?.trim() || null,
+     |       ^
+  81 |       start_date,
+  82 |       end_date,
+  83 |       status: status as 'ACTIVE' | 'PAUSED' | 'COMPLETED',
+Next.js build worker exited with code: 1 and signal: null
