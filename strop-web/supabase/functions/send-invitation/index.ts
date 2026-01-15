@@ -1,4 +1,4 @@
-// Edge Function for sending invitation emails via Resend
+// Edge Function for sending invitation emails via Resend Templates
 import "@supabase/functions-js/edge-runtime.d.ts";
 import { Resend } from "resend";
 
@@ -41,15 +41,21 @@ Deno.serve(async (req) => {
     const payload: InvitationPayload = await req.json();
     console.log("Sending invitation to:", payload.to);
 
-    // Generate HTML content
-    const htmlContent = generateInvitationHtml(payload);
-
-    // Send the email via Resend with inline HTML (not template)
+    // Send the email via Resend using TEMPLATE
+    console.log("Using template: invitation");
+    
     const { data, error } = await resend.emails.send({
       from: SENDER_EMAIL,
       to: [payload.to],
-      subject: `${payload.inviterName} te invitó a unirte a ${payload.orgName}`,
-      html: htmlContent,
+      template: {
+        id: "invitation",
+        variables: {
+          INVITER_NAME: payload.inviterName,
+          ORG_NAME: payload.orgName,
+          ROLE: payload.role,
+          INVITE_URL: payload.inviteUrl,
+        },
+      },
     });
 
     if (error) {
