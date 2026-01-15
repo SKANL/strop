@@ -151,7 +151,7 @@ export default async function AcceptInvitationPage({ params }: PageProps) {
   // User NOT logged in - Show options to register or login
   // The invitation is NOT touched - just showing options
   const loginUrl = `/login?redirect=/invite/${token}`
-  const registerUrl = `/register?redirect=/invite/${token}&email=${encodeURIComponent(invitation.email)}`
+  const registerUrl = `/register?invite_token=${token}&email=${encodeURIComponent(invitation.email)}`
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4 bg-muted/30">

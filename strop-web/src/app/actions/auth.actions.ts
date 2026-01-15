@@ -59,6 +59,7 @@ export async function signUpAction(
   const email = formData.get('email') as string
   const password = formData.get('password') as string
   const fullName = formData.get('fullName') as string
+  const inviteToken = formData.get('inviteToken') as string
 
   if (!email || !password || !fullName) {
     return { success: false, error: 'All fields are required' }
@@ -67,7 +68,17 @@ export async function signUpAction(
   const supabase = await createServerActionClient()
   const authService = createAuthService(supabase)
 
-  const { error } = await authService.signUp({ email, password, fullName })
+  // If there is an invitation, we want to redirect back to the invite page after confirmation
+  const redirectTo = inviteToken 
+    ? `${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}/invite/${inviteToken}` 
+    : undefined
+
+  const { error } = await authService.signUp({ 
+    email, 
+    password, 
+    fullName,
+    redirectTo 
+  })
 
   if (error) {
     return { success: false, error: error.message }

@@ -27,6 +27,7 @@ export interface SignUpCredentials {
   email: string
   password: string
   fullName: string
+  redirectTo?: string
 }
 
 export interface AuthSession {
@@ -72,6 +73,7 @@ export class AuthService {
         data: {
           full_name: credentials.fullName,
         },
+        emailRedirectTo: credentials.redirectTo,
       },
     })
 
