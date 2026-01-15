@@ -87,7 +87,7 @@ export async function inviteMemberAction(
     if (error || !data) return { success: false, error: error?.message || 'Error creating invitation' }
 
     // Send invitation email via Edge Function
-    const inviteUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/invite/${data.invitation_token}`
+    const inviteUrl = `${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}/invite/${data.invitation_token}`
     const { error: fnError } = await supabase.functions.invoke('send-invitation', {
       body: {
         to: email,
