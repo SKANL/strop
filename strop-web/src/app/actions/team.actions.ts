@@ -49,10 +49,11 @@ export async function getOrganizationProjectsAction(): Promise<ActionResult<Arra
 }
 
 export async function inviteMemberAction(
-  email: string,
+  rawEmail: string,
   role: string,
   project_id?: string
 ): Promise<ActionResult<{ invitation_token: string }>> {
+  const email = rawEmail.toLowerCase();
   try {
     const supabase = await createServerActionClient()
     const authService = createAuthService(supabase)
