@@ -10,10 +10,11 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:strop_app/core/theme/app_colors.dart';
 import 'package:strop_app/core/theme/app_shadows.dart';
-import 'package:strop_app/data/datasources/local/mock_data.dart';
 import 'package:strop_app/domain/entities/entities.dart';
+import 'package:strop_app/presentation/auth/bloc/auth_bloc.dart';
 
 /// Bottom sheet for selecting incident type
 class QuickIncidentTypeSelector extends StatelessWidget {
@@ -27,11 +28,13 @@ class QuickIncidentTypeSelector extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // Check user role for material request permission
-    final user = MockDataService.currentUser;
+    // Check user role for material request permission
+    final user = context.read<AuthBloc>().state.user;
     final canRequestMaterials =
-        user.role == UserRole.resident ||
-        user.role == UserRole.superintendent ||
-        user.role == UserRole.owner;
+        user != null &&
+        (user.role == UserRole.resident ||
+            user.role == UserRole.superintendent ||
+            user.role == UserRole.owner);
 
     return Container(
       decoration: BoxDecoration(

@@ -4,6 +4,12 @@ import 'package:strop_app/core/constants/api_constants.dart';
 import 'package:strop_app/data/repositories/supabase_auth_repository.dart';
 import 'package:strop_app/domain/repositories/auth_repository.dart';
 import 'package:strop_app/presentation/auth/bloc/auth_bloc.dart';
+import 'package:strop_app/data/repositories/supabase_project_repository.dart';
+import 'package:strop_app/data/repositories/supabase_incident_repository.dart';
+import 'package:strop_app/domain/repositories/project_repository.dart';
+import 'package:strop_app/domain/repositories/incident_repository.dart';
+import 'package:strop_app/presentation/home/bloc/home_bloc.dart';
+import 'package:strop_app/presentation/projects/bloc/project_bloc.dart';
 
 final sl = GetIt.instance;
 
@@ -20,7 +26,15 @@ Future<void> init() async {
   sl.registerLazySingleton<AuthRepository>(
     () => SupabaseAuthRepository(sl()),
   );
+  sl.registerLazySingleton<ProjectRepository>(
+    () => SupabaseProjectRepository(supabase: sl()),
+  );
+  sl.registerLazySingleton<IncidentRepository>(
+    () => SupabaseIncidentRepository(supabase: sl()),
+  );
 
   // 3. Blocs
   sl.registerFactory(() => AuthBloc(authRepository: sl()));
+  sl.registerFactory(() => HomeBloc(incidentRepository: sl()));
+  sl.registerFactory(() => ProjectBloc(projectRepository: sl()));
 }

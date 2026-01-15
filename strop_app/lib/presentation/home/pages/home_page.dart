@@ -1,18 +1,16 @@
 // Home Page - Smart Feed Dashboard
 // lib/presentation/home/pages/home_page.dart
-//
-// Following shadcn dashboard-01 structure:
-// - Header with user info
-// - Summary cards
-// - Recent activity feed
 
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 
 import 'package:strop_app/core/theme/app_colors.dart';
 import 'package:strop_app/core/theme/app_shadows.dart';
-import 'package:strop_app/data/datasources/local/mock_data.dart';
 import 'package:strop_app/domain/entities/entities.dart';
+import 'package:strop_app/presentation/auth/bloc/auth_bloc.dart';
+import 'package:strop_app/presentation/auth/bloc/auth_state.dart';
+import 'package:strop_app/presentation/home/bloc/home_bloc.dart';
 import 'package:strop_app/presentation/home/widgets/sync_status_indicator.dart';
 import 'package:strop_app/presentation/shared/widgets/strop_action_button.dart';
 import 'package:strop_app/presentation/shared/widgets/strop_dashboard_card.dart';
@@ -23,14 +21,10 @@ class HomePage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final user = MockDataService.currentUser;
-    final summary = MockDataService.todaySummary;
-
     return Scaffold(
       body: RefreshIndicator(
         onRefresh: () async {
-          // TODO(developer): Refresh data from repository
-          await Future<void>.delayed(const Duration(seconds: 1));
+          context.read<HomeBloc>().add(HomeRefreshed());
         },
         child: SingleChildScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
@@ -38,10 +32,26 @@ class HomePage extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               // Header with user greeting
-              _buildHeader(context, user),
+              BlocBuilder<AuthBloc, AuthState>(
+                builder: (context, state) {
+                  // Fallback user or loading state handling could go here.
+                  // Assuming authenticated for now as per routing.
+                  final user = state.user;
+                  if (user == null)
+                    return const SizedBox(height: 100); // Or shimmering
+                  return _buildHeader(context, user);
+                },
+              ),
 
               // Summary cards
-              _buildSummarySection(context, summary),
+              BlocBuilder<HomeBloc, HomeState>(
+                builder: (context, state) {
+                  final summary = state is HomeLoaded
+                      ? state.summaryStats
+                      : {'pending': 0, 'critical': 0};
+                  return _buildSummarySection(context, summary);
+                },
+              ),
 
               // Quick access buttons
               _buildQuickAccess(context),
@@ -50,7 +60,22 @@ class HomePage extends StatelessWidget {
               _buildRecentActivityHeader(context),
 
               // Activity list
-              _buildActivityList(context),
+              BlocBuilder<HomeBloc, HomeState>(
+                builder: (context, state) {
+                  if (state is HomeLoading) {
+                    return const Center(
+                      child: Padding(
+                        padding: EdgeInsets.all(20),
+                        child: CircularProgressIndicator(),
+                      ),
+                    );
+                  }
+                  final incidents = state is HomeLoaded
+                      ? state.recentActivity
+                      : <Incident>[];
+                  return _buildActivityList(context, incidents);
+                },
+              ),
 
               // Bottom padding for FAB and safe area
               const SizedBox(height: 100),
@@ -86,14 +111,22 @@ class HomePage extends StatelessWidget {
               borderRadius: BorderRadius.circular(12),
             ),
             child: Center(
-              child: Text(
-                user.initials,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 16,
-                ),
-              ),
+              child: user.profilePictureUrl != null
+                  ? ClipRRect(
+                      borderRadius: BorderRadius.circular(12),
+                      child: Image.network(
+                        user.profilePictureUrl!,
+                        fit: BoxFit.cover,
+                      ),
+                    )
+                  : Text(
+                      user.initials,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                      ),
+                    ),
             ),
           ),
 
@@ -136,7 +169,7 @@ class HomePage extends StatelessWidget {
 
   Widget _buildSummarySection(BuildContext context, Map<String, int> summary) {
     return Padding(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.fromLTRB(20, 20, 20, 10),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -155,7 +188,7 @@ class HomePage extends StatelessWidget {
               Expanded(
                 child: StropDashboardCard(
                   title: 'Pendientes',
-                  count: summary['pendingTasks'] ?? 0,
+                  count: summary['pending'] ?? 0,
                   color: AppColors.statusOpen,
                   icon: Icons.pending_actions,
                   onTap: () => context.go('/tasks'),
@@ -165,7 +198,7 @@ class HomePage extends StatelessWidget {
               Expanded(
                 child: StropDashboardCard(
                   title: 'Críticas',
-                  count: summary['criticalTasks'] ?? 0,
+                  count: summary['critical'] ?? 0,
                   color: AppColors.priorityCritical,
                   icon: Icons.priority_high,
                   onTap: () => context.go('/tasks'),
@@ -180,7 +213,7 @@ class HomePage extends StatelessWidget {
 
   Widget _buildQuickAccess(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
       child: Row(
         children: [
           Expanded(
@@ -189,7 +222,7 @@ class HomePage extends StatelessWidget {
               label: 'Nota de voz',
               color: AppColors.primary,
               onTap: () {
-                // TODO(developer): Voice note quick action
+                // TODO: Voice note quick action
               },
             ),
           ),
@@ -200,7 +233,7 @@ class HomePage extends StatelessWidget {
               label: 'Escanear QR',
               color: AppColors.accent,
               onTap: () {
-                // TODO(developer): QR scanner quick action
+                // TODO: QR scanner quick action
               },
             ),
           ),
@@ -211,7 +244,7 @@ class HomePage extends StatelessWidget {
 
   Widget _buildRecentActivityHeader(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 24, 20, 12),
+      padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
@@ -226,7 +259,7 @@ class HomePage extends StatelessWidget {
           ),
           TextButton(
             onPressed: () {
-              // TODO(developer): See all activity
+              // TODO: See all activity
             },
             child: const Text('Ver todo'),
           ),
@@ -235,13 +268,20 @@ class HomePage extends StatelessWidget {
     );
   }
 
-  Widget _buildActivityList(BuildContext context) {
-    final incidents = MockDataService.openIncidents.take(5).toList();
+  Widget _buildActivityList(BuildContext context, List<Incident> incidents) {
+    if (incidents.isEmpty) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(20),
+          child: Text('No hay actividad reciente'),
+        ),
+      );
+    }
 
     return ListView.builder(
       physics: const NeverScrollableScrollPhysics(),
       shrinkWrap: true,
-      itemCount: incidents.length,
+      itemCount: incidents.take(5).length,
       padding: EdgeInsets.zero,
       itemBuilder: (context, index) {
         final incident = incidents[index];

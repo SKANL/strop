@@ -1,19 +1,14 @@
 // Project Selector Bottom Sheet
 // lib/presentation/shell/widgets/project_selector_bottom_sheet.dart
-//
-// Replicates original app ProjectSelectorBottomSheet pattern:
-// - Handle indicator
-// - Title + subtitle
-// - List of user's projects
-// - On select: shows QuickIncidentTypeSelector OR executes custom callback
 
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 
 import 'package:strop_app/core/theme/app_colors.dart';
 import 'package:strop_app/core/theme/app_shadows.dart';
-import 'package:strop_app/data/datasources/local/mock_data.dart';
 import 'package:strop_app/domain/entities/entities.dart';
+import 'package:strop_app/presentation/projects/bloc/project_bloc.dart';
 import 'package:strop_app/presentation/shell/widgets/quick_incident_type_selector.dart';
 
 /// Bottom sheet for selecting a project
@@ -81,7 +76,7 @@ class ProjectSelectorBottomSheet extends StatelessWidget {
 
           const SizedBox(height: 16),
 
-          // Cancel button - 48dp min height per UX.md
+          // Cancel button
           OutlinedButton(
             onPressed: () => Navigator.pop(context),
             style: OutlinedButton.styleFrom(
@@ -98,23 +93,47 @@ class ProjectSelectorBottomSheet extends StatelessWidget {
   }
 
   Widget _buildProjectsList(BuildContext context) {
-    final projects = MockDataService.activeProjects;
+    return BlocBuilder<ProjectBloc, ProjectState>(
+      builder: (context, state) {
+        if (state is ProjectLoading) {
+          return const Center(child: CircularProgressIndicator());
+        }
 
-    if (projects.isEmpty) {
-      return _buildEmptyState(context);
-    }
+        if (state is ProjectError) {
+          return Center(
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Text(
+                'Error: ${state.message}',
+                style: const TextStyle(color: Colors.red),
+              ),
+            ),
+          );
+        }
 
-    return ConstrainedBox(
-      constraints: const BoxConstraints(maxHeight: 300),
-      child: ListView.separated(
-        shrinkWrap: true,
-        itemCount: projects.length,
-        separatorBuilder: (context, index) => const SizedBox(height: 8),
-        itemBuilder: (context, index) {
-          final project = projects[index];
-          return _buildProjectOption(context, project);
-        },
-      ),
+        final projects = state is ProjectLoaded ? state.projects : <Project>[];
+
+        if (projects.isEmpty) {
+          return _buildEmptyState(context);
+        }
+
+        return ConstrainedBox(
+          constraints: const BoxConstraints(maxHeight: 300),
+          child: ListView.separated(
+            shrinkWrap: true,
+            itemCount: projects.length,
+            separatorBuilder: (context, index) => const SizedBox(height: 8),
+            itemBuilder: (context, index) {
+              final project = projects[index];
+              final isSelected =
+                  state is ProjectLoaded &&
+                  state.selectedProject?.id == project.id;
+
+              return _buildProjectOption(context, project, isSelected);
+            },
+          ),
+        );
+      },
     );
   }
 
@@ -141,16 +160,24 @@ class ProjectSelectorBottomSheet extends StatelessWidget {
     );
   }
 
-  Widget _buildProjectOption(BuildContext context, Project project) {
+  Widget _buildProjectOption(
+    BuildContext context,
+    Project project,
+    bool isSelected,
+  ) {
     return InkWell(
       onTap: () => _handleSelection(context, project),
       borderRadius: BorderRadius.circular(12),
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          border: Border.all(color: AppColors.border),
+          border: Border.all(
+            color: isSelected ? AppColors.primary : AppColors.border,
+          ),
           borderRadius: BorderRadius.circular(12),
-          color: Colors.white,
+          color: isSelected
+              ? AppColors.primary.withValues(alpha: 0.05)
+              : Colors.white,
         ),
         child: Row(
           children: [
@@ -180,6 +207,7 @@ class ProjectSelectorBottomSheet extends StatelessWidget {
                     project.name,
                     style: Theme.of(context).textTheme.titleSmall?.copyWith(
                       fontWeight: FontWeight.w600,
+                      color: isSelected ? AppColors.primary : null,
                     ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
@@ -210,12 +238,19 @@ class ProjectSelectorBottomSheet extends StatelessWidget {
               ),
             ),
 
-            // Chevron
-            const Icon(
-              Icons.chevron_right,
-              color: AppColors.textHint,
-              size: 20,
-            ),
+            // Selected Indicator
+            if (isSelected)
+              const Icon(
+                Icons.check_circle,
+                color: AppColors.primary,
+                size: 20,
+              )
+            else
+              const Icon(
+                Icons.chevron_right,
+                color: AppColors.textHint,
+                size: 20,
+              ),
           ],
         ),
       ),
@@ -223,6 +258,8 @@ class ProjectSelectorBottomSheet extends StatelessWidget {
   }
 
   void _handleSelection(BuildContext context, Project project) {
+    context.read<ProjectBloc>().add(ProjectSelected(project));
+
     if (onProjectSelected != null) {
       // Custom callback provided - close and execute
       Navigator.pop(context);
@@ -231,16 +268,12 @@ class ProjectSelectorBottomSheet extends StatelessWidget {
     }
 
     // Default behavior: Close this sheet and open incident type selector
-    // Use Navigator.pop to properly close, then wait for animation to complete
     Navigator.pop(context);
 
     // Wait for the bottom sheet close animation to complete
-    // This ensures the context is properly cleaned up before opening the next sheet
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      // Double-check that the parent context is still mounted
       if (!parentContext.mounted) return;
 
-      // Open the incident type selector
       unawaited(
         showModalBottomSheet<void>(
           context: parentContext,

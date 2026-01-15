@@ -1663,4 +1663,254 @@ WITH CHECK (
  $ $ ;  
   
  C O M M E N T   O N   F U N C T I O N   p u b l i c . i n i t i a l i z e _ o w n e r _ o r g a n i z a t i o n   I S   ' C r e a t e s   a   n e w   o r g a n i z a t i o n   a n d   a s s i g n s   t h e   c u r r e n t   a u t h e n t i c a t e d   u s e r   a s   i t s   O W N E R . ' ;  
- 
+ -- ==============================================================================
+-- Function: get_dashboard_stats
+-- Description: Returns summary statistics for the dashboard in a single query.
+--              PENDING: Assigned to user && Status != CLOSED
+--              CRITICAL: Assigned to user && Status != CLOSED && Priority == CRITICAL
+-- Security: SECURITY DEFINER (Runs as creator), but uses auth.uid() for filtering.
+--           This ensures we only count user's OWN assigned items.
+-- ==============================================================================
+
+CREATE OR REPLACE FUNCTION public.get_dashboard_stats()
+RETURNS json
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+    current_uid UUID;
+    user_record_id UUID;
+    pending_count INT;
+    critical_count INT;
+BEGIN
+    -- 1. Get Current User ID from Auth
+    current_uid := auth.uid();
+    IF current_uid IS NULL THEN
+        RAISE EXCEPTION 'Not authenticated';
+    END IF;
+
+    -- 2. Resolve Public User ID
+    SELECT id INTO user_record_id
+    FROM public.users
+    WHERE auth_id = current_uid;
+
+    IF user_record_id IS NULL THEN
+         RETURN json_build_object('pending', 0, 'critical', 0);
+    END IF;
+
+    -- 3. Calculate Pending (Assigned to me, not Closed)
+    SELECT COUNT(*) INTO pending_count
+    FROM public.incidents
+    WHERE assigned_to = user_record_id
+    AND status != 'CLOSED';
+
+    -- 4. Calculate Critical (Assigned to me, Critical, not Closed)
+    SELECT COUNT(*) INTO critical_count
+    FROM public.incidents
+    WHERE assigned_to = user_record_id
+    AND status != 'CLOSED'
+    AND priority = 'CRITICAL';
+
+    -- 5. Return JSON
+    RETURN json_build_object(
+        'pending', pending_count,
+        'critical', critical_count
+    );
+END;
+$$;
+
+COMMENT ON FUNCTION public.get_dashboard_stats IS 'Returns pending and critical incident counts for the authenticated user.';
+
+-- ==============================================================================
+-- Function: get_my_projects
+-- Description: Returns list of projects user is a member of, with computed counts.
+--              Includes: member_count, open_incidents_count
+-- Security: SECURITY DEFINER + explicit membership check.
+-- ==============================================================================
+
+CREATE OR REPLACE FUNCTION public.get_my_projects()
+RETURNS TABLE (
+    id UUID,
+    organization_id UUID,
+    name TEXT,
+    location TEXT,
+    start_date DATE,
+    end_date DATE,
+    status public.project_status,
+    owner_id UUID,
+    created_at TIMESTAMPTZ,
+    updated_at TIMESTAMPTZ,
+    member_count BIGINT,
+    open_incidents_count BIGINT
+)
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+    current_uid UUID;
+    user_record_id UUID;
+BEGIN
+    -- 1. Get Current User ID from Auth
+    current_uid := auth.uid();
+    IF current_uid IS NULL THEN
+        RAISE EXCEPTION 'Not authenticated';
+    END IF;
+
+    -- 2. Resolve Public User ID
+    SELECT u.id INTO user_record_id
+    FROM public.users u
+    WHERE u.auth_id = current_uid;
+
+    IF user_record_id IS NULL THEN
+         RETURN; -- Return empty set
+    END IF;
+
+    -- 3. Return Projects with Counts
+    RETURN QUERY
+    SELECT 
+        p.id,
+        p.organization_id,
+        p.name::text,
+        p.location::text,
+        p.start_date,
+        p.end_date,
+        p.status,
+        p.owner_id,
+        p.created_at,
+        p.updated_at,
+        (
+            SELECT COUNT(*)::BIGINT 
+            FROM public.project_members pm_count 
+            WHERE pm_count.project_id = p.id
+        ) as member_count,
+        (
+            SELECT COUNT(*)::BIGINT 
+            FROM public.incidents i_count 
+            WHERE i_count.project_id = p.id 
+            AND i_count.status != 'CLOSED'
+        ) as open_incidents_count
+    FROM public.projects p
+    INNER JOIN public.project_members pm ON p.id = pm.project_id
+    WHERE pm.user_id = user_record_id
+    ORDER BY p.created_at DESC;
+
+END;
+$$;
+
+COMMENT ON FUNCTION public.get_my_projects IS 'Returns projects the user belongs to with member and incident counts.';
+-- ==============================================================================
+-- Function: initialize_owner_organization
+-- Description: Creates a new organization, makes the current user the OWNER, 
+--              and sets it as their current context.
+-- Security: SECURITY DEFINER (Runs with privileges of the creator to bypass RLS 
+--           during initial setup if needed, though RLS should allow INSERTs for auth'd users)
+-- ==============================================================================
+
+CREATE OR REPLACE FUNCTION public.initialize_owner_organization(
+    org_name TEXT,
+    plan_type public.subscription_plan DEFAULT 'STARTER'
+)
+RETURNS UUID
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+    current_uid UUID;
+    user_record_id UUID;
+    new_org_id UUID;
+    generated_slug TEXT;
+    base_slug TEXT;
+    slug_exists BOOLEAN;
+    slug_suffix INT := 0;
+BEGIN
+    -- 1. Get Current User ID from Auth
+    current_uid := auth.uid();
+    
+    IF current_uid IS NULL THEN
+        RAISE EXCEPTION 'Not authenticated';
+    END IF;
+
+    -- 2. Validate User Exists in Public Table
+    SELECT id INTO user_record_id
+    FROM public.users
+    WHERE auth_id = current_uid;
+
+    IF user_record_id IS NULL THEN
+        RAISE EXCEPTION 'User profile not found. Complete sign up first.';
+    END IF;
+
+    -- 3. Check if user already has an organization (Optional: Enforce 1 org per owner for MVP)
+    -- Uncomment if strict 1-org limit is desired
+    -- IF EXISTS (SELECT 1 FROM organization_members WHERE user_id = user_record_id AND role = 'OWNER') THEN
+    --    RAISE EXCEPTION 'User already owns an organization';
+    -- END IF;
+
+    -- 4. Generate Slug
+    -- Convert to lower case, replace non-alphanumeric with hyphen, remove leading/trailing hyphens
+    base_slug := lower(regexp_replace(trim(org_name), '[^a-zA-Z0-9]+', '-', 'g'));
+    -- Remove multi-hyphens
+    base_slug := regexp_replace(base_slug, '-+', '-', 'g');
+    -- Strip start/end hyphens
+    base_slug := trim(both '-' from base_slug);
+    
+    -- Fallback for empty slug
+    IF length(base_slug) < 2 THEN
+        base_slug := 'org-' || substring(md5(random()::text) from 1 for 6);
+    END IF;
+
+    -- Unique Slug Logic
+    generated_slug := base_slug;
+    LOOP
+        SELECT EXISTS (SELECT 1 FROM public.organizations WHERE slug = generated_slug)
+        INTO slug_exists;
+        
+        EXIT WHEN NOT slug_exists;
+        
+        slug_suffix := slug_suffix + 1;
+        generated_slug := base_slug || '-' || slug_suffix;
+    END LOOP;
+
+    -- 5. Create Organization
+    INSERT INTO public.organizations (
+        name,
+        slug,
+        plan,
+        is_active,
+        created_at,
+        updated_at
+    ) VALUES (
+        org_name,
+        generated_slug,
+        plan_type,
+        TRUE,
+        NOW(),
+        NOW()
+    ) RETURNING id INTO new_org_id;
+
+    -- 6. Assign Owner Role
+    INSERT INTO public.organization_members (
+        user_id,
+        organization_id,
+        role,
+        joined_at
+    ) VALUES (
+        user_record_id,
+        new_org_id,
+        'OWNER',
+        NOW()
+    );
+
+    -- 7. Update User's Current Context
+    UPDATE public.users
+    SET current_organization_id = new_org_id,
+        updated_at = NOW()
+    WHERE id = user_record_id;
+
+    RETURN new_org_id;
+END;
+$$;
+
+COMMENT ON FUNCTION public.initialize_owner_organization IS 'Creates a new organization and assigns the current authenticated user as its OWNER.';

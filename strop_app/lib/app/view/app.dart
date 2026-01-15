@@ -4,6 +4,9 @@ import 'package:strop_app/core/di/injection_container.dart';
 import 'package:strop_app/core/router/app_router.dart';
 import 'package:strop_app/core/theme/app_theme.dart';
 import 'package:strop_app/presentation/auth/bloc/auth_bloc.dart';
+import 'package:strop_app/presentation/auth/bloc/auth_event.dart';
+import 'package:strop_app/presentation/projects/bloc/project_bloc.dart';
+import 'package:strop_app/presentation/home/bloc/home_bloc.dart';
 
 class App extends StatelessWidget {
   const App({super.key});
@@ -13,7 +16,14 @@ class App extends StatelessWidget {
     return MultiBlocProvider(
       providers: [
         BlocProvider<AuthBloc>(
-          create: (_) => sl<AuthBloc>(), // Injected via GetIt
+          create: (_) =>
+              sl<AuthBloc>()..add(AuthCheckRequested()), // Injected via GetIt
+        ),
+        BlocProvider<ProjectBloc>(
+          create: (_) => sl<ProjectBloc>()..add(ProjectStarted()),
+        ),
+        BlocProvider<HomeBloc>(
+          create: (_) => sl<HomeBloc>()..add(HomeStarted()),
         ),
       ],
       child: const AppView(),

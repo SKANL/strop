@@ -1,29 +1,179 @@
-// Incident Detail Page
-// lib/presentation/incidents/pages/incident_detail_page.dart
-
 import 'package:flutter/material.dart';
-
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:strop_app/core/theme/app_colors.dart';
-import 'package:strop_app/core/theme/app_shadows.dart';
-import 'package:strop_app/data/datasources/local/mock_data.dart';
 import 'package:strop_app/domain/entities/entities.dart';
+import 'package:strop_app/domain/repositories/incident_repository.dart';
+import 'package:strop_app/presentation/incidents/bloc/incident_detail_bloc.dart';
 
-/// Incident detail page with photos, comments, and actions
 class IncidentDetailPage extends StatelessWidget {
+  final String incidentId;
+
   const IncidentDetailPage({
     required this.incidentId,
     super.key,
   });
 
-  final String incidentId;
+  @override
+  Widget build(BuildContext context) {
+    return BlocProvider(
+      create: (context) => IncidentDetailBloc(
+        repository: context.read<IncidentRepository>(),
+      )..add(LoadIncidentDetail(incidentId)),
+      child: BlocConsumer<IncidentDetailBloc, IncidentDetailState>(
+        listener: (context, state) {
+          if (state is IncidentDetailLoaded) {
+            if (state.actionError != null) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(state.actionError!),
+                  backgroundColor: AppColors.error,
+                  behavior: SnackBarBehavior.floating,
+                ),
+              );
+              context.read<IncidentDetailBloc>().add(ClearActionError());
+            }
+          }
+        },
+        builder: (context, state) {
+          if (state is IncidentDetailLoading) {
+            return const Scaffold(
+              body: Center(child: CircularProgressIndicator()),
+            );
+          } else if (state is IncidentDetailError) {
+            return Scaffold(
+              appBar: AppBar(title: const Text('Error')),
+              body: Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(state.message, textAlign: TextAlign.center),
+                    const SizedBox(height: 16),
+                    ElevatedButton(
+                      onPressed: () => context.read<IncidentDetailBloc>().add(
+                        LoadIncidentDetail(incidentId),
+                      ),
+                      child: const Text('Reintentar'),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          } else if (state is IncidentDetailLoaded) {
+            return _IncidentDetailView(
+              incident: state.incident,
+              comments: state.comments,
+              isCommentLoading: state.isCommentLoading,
+              isClosing: state.isClosing,
+            );
+          }
+          return const Scaffold(
+            body: Center(child: CircularProgressIndicator()),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _IncidentDetailView extends StatefulWidget {
+  final Incident incident;
+  final List<Comment> comments;
+  final bool isCommentLoading;
+  final bool isClosing;
+
+  const _IncidentDetailView({
+    required this.incident,
+    required this.comments,
+    required this.isCommentLoading,
+    required this.isClosing,
+  });
+
+  @override
+  State<_IncidentDetailView> createState() => _IncidentDetailViewState();
+}
+
+class _IncidentDetailViewState extends State<_IncidentDetailView> {
+  final TextEditingController _commentController = TextEditingController();
+
+  @override
+  void dispose() {
+    _commentController.dispose();
+    super.dispose();
+  }
+
+  void _handleAddComment() {
+    final text = _commentController.text.trim();
+    if (text.isEmpty) return;
+
+    context.read<IncidentDetailBloc>().add(
+      AddComment(widget.incident.id, text),
+    );
+    _commentController.clear();
+    FocusScope.of(context).unfocus();
+  }
+
+  void _showCloseIncidentDialog() {
+    final notesController = TextEditingController();
+    showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Cerrar Incidencia'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              '¿Estás seguro de que quieres cerrar esta incidencia? Esta acción no se puede deshacer.',
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: notesController,
+              decoration: const InputDecoration(
+                labelText: 'Notas de cierre (opcional)',
+                border: OutlineInputBorder(),
+              ),
+              maxLines: 2,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.getStatusColor('CLOSED'),
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () {
+              Navigator.pop(context);
+              context.read<IncidentDetailBloc>().add(
+                CloseIncident(widget.incident.id, notesController.text),
+              );
+            },
+            child: const Text('Cerrar Incidencia'),
+          ),
+        ],
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
-    final incident = MockDataService.mockIncidents.firstWhere(
-      (i) => i.id == incidentId,
-      orElse: () => MockDataService.mockIncidents.first,
-    );
-    final comments = MockDataService.getCommentsForIncident(incidentId);
+    if (widget.isClosing) {
+      return const Scaffold(
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              CircularProgressIndicator(),
+              SizedBox(height: 16),
+              Text('Cerrando incidencia...'),
+            ],
+          ),
+        ),
+      );
+    }
 
     return Scaffold(
       body: CustomScrollView(
@@ -32,11 +182,13 @@ class IncidentDetailPage extends StatelessWidget {
           SliverAppBar(
             expandedHeight: 120,
             pinned: true,
-            backgroundColor: AppColors.getIncidentTypeColor(incident.type.name),
+            backgroundColor: AppColors.getIncidentTypeColor(
+              widget.incident.type.name,
+            ),
             foregroundColor: Colors.white,
             flexibleSpace: FlexibleSpaceBar(
               title: Text(
-                incident.type.displayName,
+                widget.incident.type.displayName,
                 style: const TextStyle(fontSize: 14),
               ),
               background: Container(
@@ -45,15 +197,23 @@ class IncidentDetailPage extends StatelessWidget {
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                     colors: [
-                      AppColors.getIncidentTypeColor(incident.type.name),
+                      AppColors.getIncidentTypeColor(widget.incident.type.name),
                       AppColors.getIncidentTypeColor(
-                        incident.type.name,
+                        widget.incident.type.name,
                       ).withValues(alpha: 0.7),
                     ],
                   ),
                 ),
               ),
             ),
+            actions: [
+              if (widget.incident.status != IncidentStatus.closed)
+                IconButton(
+                  icon: const Icon(Icons.check_circle_outline),
+                  tooltip: 'Cerrar Incidencia',
+                  onPressed: _showCloseIncidentDialog,
+                ),
+            ],
           ),
 
           // Content
@@ -68,14 +228,14 @@ class IncidentDetailPage extends StatelessWidget {
                     children: [
                       Expanded(
                         child: Text(
-                          incident.title,
+                          widget.incident.title,
                           style: Theme.of(context).textTheme.titleLarge
                               ?.copyWith(
                                 fontWeight: FontWeight.bold,
                               ),
                         ),
                       ),
-                      if (incident.isCritical)
+                      if (widget.incident.priority == IncidentPriority.critical)
                         Container(
                           padding: const EdgeInsets.symmetric(
                             horizontal: 8,
@@ -119,16 +279,18 @@ class IncidentDetailPage extends StatelessWidget {
                     ),
                     decoration: BoxDecoration(
                       color: AppColors.getStatusColor(
-                        incident.status.name,
+                        widget.incident.status.name,
                       ).withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(6),
                     ),
                     child: Text(
-                      incident.status.displayName,
+                      widget.incident.status.displayName,
                       style: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
-                        color: AppColors.getStatusColor(incident.status.name),
+                        color: AppColors.getStatusColor(
+                          widget.incident.status.name,
+                        ),
                       ),
                     ),
                   ),
@@ -146,18 +308,18 @@ class IncidentDetailPage extends StatelessWidget {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    incident.description,
+                    widget.incident.description,
                     style: Theme.of(context).textTheme.bodyMedium,
                   ),
                   const SizedBox(height: 24),
 
                   // Location
-                  if (incident.location != null) ...[
+                  if (widget.incident.location != null) ...[
                     _buildInfoRow(
                       context,
                       Icons.location_on_outlined,
                       'Ubicación',
-                      incident.location!,
+                      widget.incident.location!,
                     ),
                     const SizedBox(height: 12),
                   ],
@@ -167,7 +329,7 @@ class IncidentDetailPage extends StatelessWidget {
                     context,
                     Icons.person_outline,
                     'Reportado por',
-                    incident.createdBy?.fullName ?? 'Usuario',
+                    widget.incident.createdBy?.fullName ?? 'Usuario',
                   ),
                   const SizedBox(height: 12),
 
@@ -176,26 +338,26 @@ class IncidentDetailPage extends StatelessWidget {
                     context,
                     Icons.schedule,
                     'Fecha',
-                    incident.timeAgo,
+                    _formatDate(widget.incident.createdAt),
                   ),
 
                   // Assigned to
-                  if (incident.assignedTo != null) ...[
+                  if (widget.incident.assignedTo != null) ...[
                     const SizedBox(height: 12),
                     _buildInfoRow(
                       context,
                       Icons.assignment_ind_outlined,
                       'Asignado a',
-                      incident.assignedTo!.fullName,
+                      widget.incident.assignedTo!.fullName,
                     ),
                   ],
 
                   const SizedBox(height: 24),
 
                   // Photos section
-                  if (incident.photoUrls.isNotEmpty) ...[
+                  if (widget.incident.photoUrls.isNotEmpty) ...[
                     Text(
-                      'EVIDENCIA (${incident.photoUrls.length})',
+                      'EVIDENCIA (${widget.incident.photoUrls.length})',
                       style: const TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.bold,
@@ -208,8 +370,9 @@ class IncidentDetailPage extends StatelessWidget {
                       height: 120,
                       child: ListView.builder(
                         scrollDirection: Axis.horizontal,
-                        itemCount: incident.photoUrls.length,
+                        itemCount: widget.incident.photoUrls.length,
                         itemBuilder: (context, index) {
+                          final url = widget.incident.photoUrls[index];
                           return Container(
                             width: 120,
                             height: 120,
@@ -217,13 +380,21 @@ class IncidentDetailPage extends StatelessWidget {
                             decoration: BoxDecoration(
                               color: AppColors.backgroundLight,
                               borderRadius: BorderRadius.circular(12),
-                              image: const DecorationImage(
-                                image: NetworkImage(
-                                  'https://picsum.photos/120',
-                                ),
+                              border: Border.all(color: AppColors.border),
+                              image: DecorationImage(
+                                image: NetworkImage(url),
                                 fit: BoxFit.cover,
+                                onError: (obj, trace) {},
                               ),
                             ),
+                            child: url.isEmpty
+                                ? const Center(
+                                    child: Icon(
+                                      Icons.image,
+                                      color: AppColors.textHint,
+                                    ),
+                                  )
+                                : null,
                           );
                         },
                       ),
@@ -231,9 +402,12 @@ class IncidentDetailPage extends StatelessWidget {
                     const SizedBox(height: 24),
                   ],
 
+                  const Divider(),
+                  const SizedBox(height: 16),
+
                   // Comments section
                   Text(
-                    'COMENTARIOS (${comments.length})',
+                    'COMENTARIOS (${widget.comments.length})',
                     style: const TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.bold,
@@ -241,66 +415,148 @@ class IncidentDetailPage extends StatelessWidget {
                       letterSpacing: 0.5,
                     ),
                   ),
+                  const SizedBox(height: 16),
+
+                  _buildCommentsList(context),
                 ],
               ),
             ),
           ),
 
-          // Comments list
-          SliverList(
-            delegate: SliverChildBuilderDelegate(
-              (context, index) => _buildCommentItem(context, comments[index]),
-              childCount: comments.length,
-            ),
-          ),
-
+          // Bottom padding
           const SliverToBoxAdapter(
-            child: SizedBox(height: 100),
+            child: SizedBox(height: 80),
           ),
         ],
       ),
+      bottomSheet: widget.incident.status != IncidentStatus.closed
+          ? _buildCommentInput(context)
+          : null,
+    );
+  }
 
-      // Comment input
-      bottomSheet: Container(
-        padding: EdgeInsets.fromLTRB(
-          16,
-          12,
-          16,
-          MediaQuery.of(context).padding.bottom + 12,
+  Widget _buildCommentsList(BuildContext context) {
+    if (widget.isCommentLoading && widget.comments.isEmpty) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(16.0),
+          child: CircularProgressIndicator(),
         ),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          boxShadow: AppShadows.medium,
+      );
+    }
+
+    if (widget.comments.isEmpty) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 24),
+        child: Center(
+          child: Text(
+            'No hay comentarios aún.\nSé el primero en comentar.',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: AppColors.textHint),
+          ),
         ),
+      );
+    }
+
+    return ListView.builder(
+      physics: const NeverScrollableScrollPhysics(),
+      shrinkWrap: true,
+      itemCount: widget.comments.length,
+      itemBuilder: (context, index) {
+        final comment = widget.comments[index];
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 16),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              CircleAvatar(
+                radius: 16,
+                backgroundImage:
+                    comment.author?.profilePictureUrl != null &&
+                        comment.author!.profilePictureUrl!.isNotEmpty
+                    ? NetworkImage(comment.author!.profilePictureUrl!)
+                    : null,
+                child: comment.author?.profilePictureUrl == null
+                    ? Text(comment.author?.fullName[0] ?? '?')
+                    : null,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Text(
+                          comment.author?.fullName ?? 'Usuario',
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 13,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          _formatDate(comment.createdAt),
+                          style: const TextStyle(
+                            color: AppColors.textHint,
+                            fontSize: 11,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Text(comment.text),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildCommentInput(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      decoration: BoxDecoration(
+        color: Theme.of(context).scaffoldBackgroundColor,
+        border: const Border(top: BorderSide(color: AppColors.border)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            offset: const Offset(0, -2),
+            blurRadius: 10,
+          ),
+        ],
+      ),
+      child: SafeArea(
         child: Row(
           children: [
             Expanded(
               child: TextField(
-                decoration: InputDecoration(
+                controller: _commentController,
+                decoration: const InputDecoration(
                   hintText: 'Escribe un comentario...',
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(24),
-                    borderSide: const BorderSide(color: AppColors.border),
-                  ),
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 10,
+                  border: InputBorder.none,
+                  contentPadding: EdgeInsets.symmetric(
+                    horizontal: 0,
+                    vertical: 8,
                   ),
                 ),
+                minLines: 1,
+                maxLines: 3,
               ),
             ),
-            const SizedBox(width: 8),
-            Container(
-              decoration: const BoxDecoration(
-                color: AppColors.primary,
-                shape: BoxShape.circle,
-              ),
-              child: IconButton(
-                icon: const Icon(Icons.send, color: Colors.white),
-                onPressed: () {
-                  // TODO(developer): Send comment
-                },
-              ),
+            IconButton(
+              onPressed: widget.isCommentLoading ? null : _handleAddComment,
+              icon: widget.isCommentLoading
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.send, color: AppColors.primary),
             ),
           ],
         ),
@@ -332,68 +588,8 @@ class IncidentDetailPage extends StatelessWidget {
     );
   }
 
-  Widget _buildCommentItem(BuildContext context, Comment comment) {
-    final isCurrentUser = comment.authorId == MockDataService.currentUser.id;
-
-    return Align(
-      alignment: isCurrentUser ? Alignment.centerRight : Alignment.centerLeft,
-      child: Container(
-        margin: EdgeInsets.fromLTRB(
-          isCurrentUser ? 60 : 16,
-          4,
-          isCurrentUser ? 16 : 60,
-          4,
-        ),
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: isCurrentUser
-              ? AppColors.primary.withValues(alpha: 0.1)
-              : Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          border: isCurrentUser ? null : Border.all(color: AppColors.border),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  comment.author?.fullName ?? 'Usuario',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    fontWeight: FontWeight.w600,
-                    color: isCurrentUser
-                        ? AppColors.primary
-                        : AppColors.textPrimary,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  _formatTime(comment.createdAt),
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: AppColors.textHint,
-                    fontSize: 10,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 4),
-            Text(
-              comment.text,
-              style: Theme.of(context).textTheme.bodyMedium,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  String _formatTime(DateTime? time) {
-    if (time == null) return '';
-    final now = DateTime.now();
-    final diff = now.difference(time);
-    if (diff.inMinutes < 60) return 'hace ${diff.inMinutes}m';
-    if (diff.inHours < 24) return 'hace ${diff.inHours}h';
-    return 'hace ${diff.inDays}d';
+  String _formatDate(DateTime? date) {
+    if (date == null) return '';
+    return '${date.day}/${date.month}/${date.year} ${date.hour}:${date.minute.toString().padLeft(2, '0')}';
   }
 }
