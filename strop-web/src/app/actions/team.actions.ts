@@ -100,7 +100,9 @@ export async function inviteMemberAction(
 
     if (fnError) {
       console.error('Error sending invitation email:', fnError)
-      // Don't fail the action if email fails - invitation is still created
+      // Rollback: delete the invitation so it can be retried
+      await supabase.from('invitations').delete().eq('invitation_token', data.invitation_token)
+      return { success: false, error: `Error enviando correo: ${fnError.message || JSON.stringify(fnError)}` }
     }
 
     return { success: true, data: { invitation_token: data.invitation_token } }
