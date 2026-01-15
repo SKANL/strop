@@ -61,6 +61,13 @@ export async function inviteMemberAction(
     if (profileError || !profile) return { success: false, error: 'Usuario no autenticado' }
     if (!profile.current_organization_id) return { success: false, error: 'No hay organización seleccionada' }
 
+    // Get organization name for the email
+    const { data: org } = await supabase
+      .from('organizations')
+      .select('name')
+      .eq('id', profile.current_organization_id)
+      .single()
+
     const token = typeof crypto !== 'undefined' && 'randomUUID' in crypto ? (crypto as any).randomUUID() : `inv-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
 
@@ -78,6 +85,23 @@ export async function inviteMemberAction(
     const { data, error } = await supabase.from('invitations').insert(payload).select().single()
 
     if (error || !data) return { success: false, error: error?.message || 'Error creating invitation' }
+
+    // Send invitation email via Edge Function
+    const inviteUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/invite/${data.invitation_token}`
+    const { error: fnError } = await supabase.functions.invoke('send-invitation', {
+      body: {
+        to: email,
+        inviterName: profile.full_name || 'Tu equipo',
+        orgName: org?.name || 'la organización',
+        role: role,
+        inviteUrl: inviteUrl,
+      },
+    })
+
+    if (fnError) {
+      console.error('Error sending invitation email:', fnError)
+      // Don't fail the action if email fails - invitation is still created
+    }
 
     return { success: true, data: { invitation_token: data.invitation_token } }
   } catch (err) {
