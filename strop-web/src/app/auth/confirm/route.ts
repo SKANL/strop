@@ -17,8 +17,12 @@ export async function GET(request: NextRequest) {
   if (token_hash && type) {
     const supabase = await createRouteHandlerClient()
 
+    // Map incoming type to Supabase OTP type
+    // Supabase Auth uses 'email' for signup confirmations, not 'signup'
+    const otpType = type === 'signup' ? 'email' : type as 'email' | 'recovery' | 'invite' | 'email_change'
+
     const { error } = await supabase.auth.verifyOtp({
-      type: type as 'email' | 'recovery' | 'invite' | 'email_change',
+      type: otpType,
       token_hash,
     })
 
