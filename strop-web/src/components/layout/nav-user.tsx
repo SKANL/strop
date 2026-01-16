@@ -7,6 +7,8 @@ import {
   LogOut,
 } from 'lucide-react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { useAuth } from '@/hooks/use-supabase';
 
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
@@ -41,6 +43,8 @@ function getInitials(name: string): string {
 
 export function NavUser({ user }: NavUserProps) {
   const { isMobile } = useSidebar();
+  const router = useRouter();
+  const { signOut } = useAuth();
 
   return (
     <SidebarMenu>
@@ -104,7 +108,18 @@ export function NavUser({ user }: NavUserProps) {
               </DropdownMenuItem>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
-            <DropdownMenuItem className="text-destructive focus:text-destructive">
+            <DropdownMenuItem
+              className="text-destructive focus:text-destructive"
+              onSelect={async (e) => {
+                e.preventDefault();
+                try {
+                  await signOut();
+                } catch {
+                  // ignore
+                }
+                router.push('/login');
+              }}
+            >
               <LogOut className="mr-2 size-4" />
               Cerrar sesión
             </DropdownMenuItem>
