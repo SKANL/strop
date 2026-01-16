@@ -12,7 +12,6 @@ import {
   CheckCircle2,
   Clock,
   AlertTriangle,
-  Edit,
 } from 'lucide-react';
 
 import SetBreadcrumbs from '@/components/layout/set-breadcrumbs';
@@ -127,37 +126,34 @@ export function IncidentDetailClient({
 
           <div className="flex items-center gap-2">
             {incident.status !== 'CLOSED' && (
+              <Button variant="secondary" onClick={() => setShowAssign(true)}>
+                <UserPlus className="mr-2 h-4 w-4" />
+                {incident.assigned_to ? 'Reasignar' : 'Asignar'}
+              </Button>
+            )}
+            
+            {incident.status !== 'CLOSED' && (
               <Button onClick={() => setShowClose(true)}>
                 <CheckCircle2 className="mr-2 h-4 w-4" />
                 Cerrar
               </Button>
             )}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="icon">
-                  <MoreVertical className="h-4 w-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={() => setShowAssign(true)}>
-                  <UserPlus className="mr-2 h-4 w-4" />
-                  {incident.assigned_to ? 'Reasignar' : 'Asignar'}
-                </DropdownMenuItem>
-                {incident.status === 'CLOSED' && (
+
+            {incident.status === 'CLOSED' && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="icon">
+                    <MoreVertical className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
                   <DropdownMenuItem onClick={() => setShowReopenConfirm(true)}>
                     <Clock className="mr-2 h-4 w-4" />
                     Reabrir
                   </DropdownMenuItem>
-                )}
-                <DropdownMenuSeparator />
-                <DropdownMenuItem asChild>
-                  <Link href={`/incidents/${incidentId}/edit`}>
-                    <Edit className="mr-2 h-4 w-4" />
-                    Editar
-                  </Link>
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
           </div>
         </div>
       </div>
