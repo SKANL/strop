@@ -211,12 +211,13 @@ export async function completeOnboardingAction(
       }
     }
 
-    // Redirect to dashboard after successful onboarding
-    redirect('/dashboard')
   } catch (error) {
     return {
       success: false,
       error: error instanceof Error ? error.message : 'An unexpected error occurred',
     }
   }
+
+  // Redirect to dashboard after successful onboarding (outside try/catch)
+  redirect('/dashboard')
 }

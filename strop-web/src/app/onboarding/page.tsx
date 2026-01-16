@@ -39,13 +39,7 @@ export default function OnboardingPage() {
         toast.error(result.error || 'Error al crear la organización');
       }
     } catch (error) {
-      // If there's a redirect, Next.js throws an error that's normal
-      if (error && typeof error === 'object' && 'digest' in error) {
-        const digest = (error as { digest?: string }).digest;
-        if (digest?.includes('NEXT_REDIRECT')) {
-          return; // Redirect successful
-        }
-      }
+      // If there's a redirect, Next.js handles it automatically if thrown by the action
       toast.error('Error inesperado. Por favor intenta de nuevo.');
     } finally {
       setIsLoading(false);
