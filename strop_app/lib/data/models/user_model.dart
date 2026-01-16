@@ -22,7 +22,7 @@ class UserModel extends User {
       email: json['email'] as String,
       fullName: json['full_name'] as String,
       authId: json['auth_id'] as String?,
-      currentOrganizationId: json['organization_id'] as String?,
+      currentOrganizationId: json['current_organization_id'] as String?,
       profilePictureUrl: json['profile_picture_url'] as String?,
       isActive: json['is_active'] as bool? ?? true,
       themeMode: json['theme_mode'] as String? ?? 'light',

@@ -13,6 +13,7 @@ import 'package:strop_app/presentation/incidents/pages/incident_detail_page.dart
 import 'package:strop_app/presentation/profile/pages/organization_page.dart';
 import 'package:strop_app/presentation/profile/pages/profile_page.dart';
 import 'package:strop_app/presentation/profile/pages/users_page.dart';
+import 'package:strop_app/presentation/profile/pages/change_password_page.dart';
 import 'package:strop_app/presentation/projects/pages/project_detail_page.dart';
 import 'package:strop_app/presentation/projects/pages/projects_list_page.dart';
 import 'package:strop_app/presentation/shell/pages/main_shell_page.dart';
@@ -131,7 +132,17 @@ class AppRouter {
                         name: 'organization-users',
                         builder: (context, state) => const UsersPage(),
                       ),
+                      GoRoute(
+                        path: 'change-password',
+                        name: 'change-password',
+                        builder: (context, state) => const ChangePasswordPage(),
+                      ),
                     ],
+                  ),
+                  GoRoute(
+                    path: 'change-password',
+                    name: 'change-password-root',
+                    builder: (context, state) => const ChangePasswordPage(),
                   ),
                   GoRoute(
                     path: 'notifications',
