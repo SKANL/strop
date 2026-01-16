@@ -144,7 +144,7 @@ export async function getTeamMembersAction(): Promise<ActionResult<TeamMember[]>
         `
         user_id,
         role,
-        users!user_id (
+        users!organization_members_user_id_fkey (
           id,
           email,
           full_name,
@@ -215,12 +215,16 @@ export async function getTeamMemberAction(id: string): Promise<ActionResult<any>
       .from('organization_members')
       .select('role')
       .eq('user_id', id)
+      .eq('organization_id', profile.current_organization_id)
       .single()
+    
+    if (!member) return { success: false, error: 'Usuario no pertenece a esta organización' }
 
     const { data: projectsData } = await supabase
       .from('project_members')
-      .select('projects:project_id (id, name)')
+      .select('projects!project_members_project_id_fkey (id, name)')
       .eq('user_id', id)
+      .eq('organization_id', profile.current_organization_id)
 
     const projects = (projectsData ?? [])
       .map((p: any) => p.projects)
