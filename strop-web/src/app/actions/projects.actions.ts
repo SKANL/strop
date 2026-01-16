@@ -366,10 +366,16 @@ export async function getProjectDetailAction(projectId: string): Promise<ActionR
 
     const members = (membersResult.data || []).map((m: any) => m.user_id)
 
+    // Normalize property name: DB uses `end_date` but UI expects `expected_end_date`.
+    const projectWithExpected = {
+      ...project,
+      expected_end_date: (project as any).end_date ?? null,
+    }
+
     return {
       success: true,
       data: {
-        project,
+        project: projectWithExpected,
         members,
         incidents: incidentsResult.data || [],
       },

@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge'
 import { AlertCircle, Building2, MapPin, ArrowRight, Activity, Calendar } from 'lucide-react'
 import { useTheme } from 'next-themes'
 import { useEffect, useState, useMemo } from 'react'
+import { useRouter } from 'next/navigation'
 import MapLibreGL from 'maplibre-gl'
 import type { MapData, GeoJSONFeature } from '../types'
 
@@ -18,6 +19,7 @@ function MapLayers({ data }: DashboardMapProps) {
   const { map, isLoaded } = useMap()
   const { resolvedTheme } = useTheme()
   const [selectedFeature, setSelectedFeature] = useState<GeoJSONFeature | null>(null)
+  const router = useRouter()
 
   // Memoize data to prevent re-processing
   const projectsData = useMemo(() => data.projects, [data.projects])
@@ -238,7 +240,16 @@ function MapLayers({ data }: DashboardMapProps) {
                 </div>
             </CardContent>
             <CardFooter className="pt-0">
-                <Button size="sm" className="w-full">
+                <Button
+                  size="sm"
+                  className="w-full"
+                  onClick={() => {
+                    const pid = selectedFeature?.properties.projectId || selectedFeature?.properties.id
+                    if (!pid) return
+                    setSelectedFeature(null)
+                    router.push(`/projects/${pid}`)
+                  }}
+                >
                     Ver Detalles <ArrowRight className="size-4 ml-2" />
                 </Button>
             </CardFooter>
