@@ -16,6 +16,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Separator } from '@/components/ui/separator';
 import { IncidentDetailClient } from '@/components/features/incidents/incident-detail-client';
+import { IncidentPhotosGallery } from '@/components/features/incidents/incident-photos-gallery';
 import { getIncidentAction, getIncidentCommentsAction } from '@/app/actions/incidents.actions';
 import type { IncidentStatus, IncidentPriority, IncidentType } from '@/types';
 
@@ -143,28 +144,7 @@ export default async function IncidentDetailPage({
               <TabsContent value="photos" className="mt-4">
                 <Card>
                   <CardContent className="pt-6">
-                    {incident.photos.length === 0 ? (
-                      <p className="text-sm text-muted-foreground text-center py-8">
-                        No hay fotos adjuntas
-                      </p>
-                    ) : (
-                      <div className="grid grid-cols-3 gap-4">
-                        {incident.photos.map((photo) => (
-                          <div
-                            key={photo.id}
-                            className="aspect-video relative rounded-lg overflow-hidden bg-muted cursor-pointer hover:opacity-90 transition-opacity"
-                          >
-                            <Image
-                              src={photo.storage_path}
-                              alt="Evidencia"
-                              fill
-                              className="object-cover"
-                              sizes="(max-width: 768px) 100vw, 33vw"
-                            />
-                          </div>
-                        ))}
-                      </div>
-                    )}
+                    <IncidentPhotosGallery photos={incident.photos} />
                   </CardContent>
                 </Card>
               </TabsContent>
