@@ -229,20 +229,28 @@ export function InviteForm({ initialProjects }: { initialProjects?: { id: string
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Proyecto (opcional)</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Asignar a un proyecto" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {projects.map((project) => (
-                          <SelectItem key={project.id} value={project.id}>
-                            {project.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    {projects.length > 0 ? (
+                      <Select onValueChange={field.onChange} defaultValue={field.value}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Asignar a un proyecto" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {projects.map((project) => (
+                            <SelectItem key={project.id} value={project.id}>
+                              {project.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    ) : (
+                      <div className="rounded-md border border-dashed p-4 text-center">
+                        <p className="text-sm text-muted-foreground">
+                          No hay proyectos activos. Crea un proyecto primero.
+                        </p>
+                      </div>
+                    )}
                     <FormDescription>
                       Opcionalmente asigna al usuario a un proyecto específico
                     </FormDescription>

@@ -1,7 +1,7 @@
 {
   "imports": {
-    "resend": "npm:resend@4.2.0",
-    "standardwebhooks": "npm:standardwebhooks@1.0.0",
-    "@supabase/functions-js/edge-runtime.d.ts": "https://esm.sh/@supabase/functions-js@2.4.1/src/edge-runtime.d.ts"
+    "@supabase/functions-js": "jsr:@supabase/functions-js@2",
+    "standardwebhooks": "https://esm.sh/standardwebhooks@1.0.0",
+    "resend": "npm:resend@6.4.0"
   }
 }

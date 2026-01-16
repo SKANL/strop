@@ -296,3 +296,148 @@ export async function getIncidentsAction(): Promise<
     return { success: false, error: `Error inesperado: ${message}`, data: [] }
   }
 }
+
+/**
+ * Get a single incident with full details
+ */
+export async function getIncidentAction(
+  incidentId: string
+): Promise<
+  ActionResult<{
+    id: string
+    project_id: string
+    project_name: string
+    title: string
+    description: string
+    type: IncidentType
+    priority: IncidentPriority
+    status: IncidentStatus
+    location: string | null
+    created_by: string
+    created_by_name: string
+    assigned_to: string | null
+    assigned_to_name: string | null
+    closed_at: string | null
+    closed_by: string | null
+    closed_notes: string | null
+    created_at: string
+    photos: { id: string; storage_path: string }[]
+  }>
+> {
+  try {
+    const supabase = await createServerActionClient()
+    const authService = createAuthService(supabase)
+
+    const { data: profile, error: profileError } = await authService.getUserProfile()
+
+    if (profileError || !profile) {
+      return { success: false, error: 'Usuario no autenticado' }
+    }
+
+    // Get incident with related data
+    const { data: incident, error: incidentError } = await supabase
+      .from('incidents')
+      .select(`
+        *,
+        projects:project_id (name),
+        created_by_user:users!incidents_created_by_fkey (full_name),
+        assigned_to_user:users!incidents_assigned_to_fkey (full_name)
+      `)
+      .eq('id', incidentId)
+      .single()
+
+    if (incidentError || !incident) {
+      return { success: false, error: 'Incidencia no encontrada' }
+    }
+
+    // Get photos
+    const { data: photos } = await supabase
+      .from('photos')
+      .select('id, storage_path')
+      .eq('incident_id', incidentId)
+
+    return {
+      success: true,
+      data: {
+        id: incident.id,
+        project_id: incident.project_id,
+        project_name: (incident.projects as { name?: string } | null)?.name ?? 'Proyecto',
+        title: incident.title,
+        description: incident.description ?? '',
+        type: incident.type as IncidentType,
+        priority: incident.priority as IncidentPriority,
+        status: incident.status as IncidentStatus,
+        location: incident.location ?? null,
+        created_by: incident.created_by ?? '',
+        created_by_name:
+          (incident.created_by_user as { full_name?: string } | null)?.full_name ?? 'Usuario',
+        assigned_to: incident.assigned_to ?? null,
+        assigned_to_name:
+          (incident.assigned_to_user as { full_name?: string } | null)?.full_name ?? null,
+        closed_at: incident.closed_at ?? null,
+        closed_by: incident.closed_by ?? null,
+        closed_notes: incident.closed_notes ?? null,
+        created_at: incident.created_at ?? new Date().toISOString(),
+        photos: photos ?? [],
+      },
+    }
+  } catch (error) {
+    console.error('Unexpected error in getIncidentAction:', error)
+    const message = error instanceof Error ? error.message : 'Error desconocido'
+    return { success: false, error: `Error inesperado: ${message}` }
+  }
+}
+
+/**
+ * Get comments for an incident
+ */
+export async function getIncidentCommentsAction(
+  incidentId: string
+): Promise<
+  ActionResult<{
+    id: string
+    text: string
+    author_name: string
+    created_at: string
+  }[]>
+> {
+  try {
+    const supabase = await createServerActionClient()
+    const authService = createAuthService(supabase)
+
+    const { data: profile, error: profileError } = await authService.getUserProfile()
+
+    if (profileError || !profile) {
+      return { success: false, error: 'Usuario no autenticado', data: [] }
+    }
+
+    const { data: comments, error } = await supabase
+      .from('comments')
+      .select(`
+        id,
+        text,
+        created_at,
+        author:users!comments_author_id_fkey (full_name)
+      `)
+      .eq('incident_id', incidentId)
+      .order('created_at', { ascending: true })
+
+    if (error) {
+      return { success: false, error: error.message, data: [] }
+    }
+
+    return {
+      success: true,
+      data: comments.map((c) => ({
+        id: c.id,
+        text: c.text,
+        author_name: (c.author as { full_name?: string } | null)?.full_name ?? 'Usuario',
+        created_at: c.created_at,
+      })),
+    }
+  } catch (error) {
+    console.error('Unexpected error in getIncidentCommentsAction:', error)
+    const message = error instanceof Error ? error.message : 'Error desconocido'
+    return { success: false, error: `Error inesperado: ${message}`, data: [] }
+  }
+}

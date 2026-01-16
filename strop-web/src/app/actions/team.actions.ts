@@ -35,7 +35,7 @@ export async function getOrganizationProjectsAction(): Promise<ActionResult<Arra
       .from('projects')
       .select('id, name')
       .eq('organization_id', profile.current_organization_id)
-      .eq('is_active', true)
+      .eq('status', 'ACTIVE')
       .order('name')
 
     if (error) return { success: false, error: error.message }

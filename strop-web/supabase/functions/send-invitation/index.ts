@@ -42,7 +42,7 @@ Deno.serve(async (req) => {
     console.log("Sending invitation to:", payload.to);
 
     // Send the email via Resend using TEMPLATE
-    const { data, error } = await resend.emails.send({
+    const { error } = await resend.emails.send({
       from: SENDER_EMAIL,
       to: [payload.to],
       template: {
@@ -61,10 +61,10 @@ Deno.serve(async (req) => {
       throw error;
     }
 
-    console.log(`Invitation email sent successfully to ${payload.to}`, data);
+    console.log(`Invitation email sent successfully to ${payload.to}`);
 
     return new Response(
-      JSON.stringify({ success: true, data }),
+      JSON.stringify({ success: true }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error) {

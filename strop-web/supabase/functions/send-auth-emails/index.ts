@@ -1,5 +1,6 @@
-// Supabase Auth Hook for sending custom emails via Resend Templates
+// Supabase Auth Hook for sending custom emails via Resend
 // Based on: https://github.com/resend/supabase-auth-hooks-with-resend-templates
+// Setup type definitions for built-in Supabase Runtime APIs
 import "@supabase/functions-js/edge-runtime.d.ts";
 import { Webhook } from "standardwebhooks";
 import { Resend } from "resend";
@@ -10,11 +11,12 @@ const SENDER_EMAIL = Deno.env.get("SENDER_EMAIL");
 
 const resend = new Resend(RESEND_API_KEY);
 
-// Mapping of email action types to Resend template IDs
-// These templates must be created and PUBLISHED in your Resend dashboard
-const EMAIL_TEMPLATES: Record<string, string> = {
-  signup: "confirm-account",
-  recovery: "reset-password",
+// Mapping of email action types to Resend template IDs and subjects
+// You need to create these templates in your Resend dashboard
+const EMAIL_TEMPLATES = {
+  signup: "confirm-account", // Create this template in Resend
+  recovery: "reset-password", // Create this template in Resend
+  password_changed_notification: "password-changed-notification", // Create this template in Resend
 };
 
 // Types for the webhook payload
@@ -28,7 +30,7 @@ interface WebhookPayload {
     token: string;
     token_hash: string;
     redirect_to: string;
-    email_action_type: string;
+    email_action_type: keyof typeof EMAIL_TEMPLATES;
     site_url: string;
     token_new?: string;
     token_hash_new?: string;
@@ -53,16 +55,19 @@ Deno.serve(async (req) => {
 
   try {
     // Verify the webhook signature and extract payload
+    // We cast to unknown first then WebhookPayload because verify returns any
     const {
       user,
       email_data: { token_hash, redirect_to, email_action_type, site_url },
     } = wh.verify(payload, headers) as unknown as WebhookPayload;
 
-    // Get the template ID for this action
-    const templateId = EMAIL_TEMPLATES[email_action_type];
+    // Get the template configuration for this action
+    const templateConfig = EMAIL_TEMPLATES[email_action_type];
 
-    if (!templateId) {
+    if (!templateConfig) {
       console.warn(`No template found for action type: ${email_action_type}`);
+      // Fallback or return error depending on your preference.
+      // Returning 200 to avoid retries if you don't want to handle this type.
       throw new Error(`Unsupported email action type: ${email_action_type}`);
     }
 
@@ -72,17 +77,18 @@ Deno.serve(async (req) => {
       type: email_action_type,
     });
 
-    // Determine next path from redirect_to
     if (redirect_to) {
+      // The Next.js route expects 'next' parameter for the redirect path
       try {
         const nextPath = new URL(redirect_to).pathname;
         queryParams.append("next", nextPath);
       } catch {
+        // If redirect_to is not a full URL, use it as is
         queryParams.append("next", redirect_to);
       }
     }
 
-    // Use the origin from redirect_to if available
+    // Use the origin from redirect_to if available to ensure we point to the correct client
     let baseUrl = site_url;
     if (redirect_to && redirect_to.startsWith("http")) {
       try {
@@ -93,18 +99,16 @@ Deno.serve(async (req) => {
       }
     }
 
-    const confirmationUrl = `${baseUrl}/auth/confirm?${queryParams.toString()}`;
+    const confirmationUrl = `${baseUrl}/auth/${
+      email_action_type === "signup" ? "confirm" : "update-password"
+    }?${queryParams.toString()}`;
 
-    console.log(`Sending ${email_action_type} email to ${user.email}`);
-    console.log(`Template: ${templateId}`);
-    console.log(`Confirmation URL: ${confirmationUrl}`);
-
-    // Send the email via Resend using TEMPLATE
+    // Send the email via Resend
     const { error } = await resend.emails.send({
       from: SENDER_EMAIL,
       to: [user.email],
       template: {
-        id: templateId,
+        id: templateConfig,
         variables: {
           USER_EMAIL: user.email,
           CONFIRMATION_URL: confirmationUrl,
@@ -113,12 +117,14 @@ Deno.serve(async (req) => {
     });
 
     if (error) {
-      console.error("Resend error:", JSON.stringify(error));
       throw error;
     }
 
-    console.log(`Email sent successfully for ${email_action_type} to ${user.email}`);
+    console.log(
+      `Email sent successfully for ${email_action_type} to ${user.email}`
+    );
 
+    // Success response
     return new Response(JSON.stringify({ success: true }), {
       status: 200,
       headers: { "Content-Type": "application/json" },
