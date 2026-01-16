@@ -143,6 +143,32 @@ export default async function AcceptInvitationPage({ params }: PageProps) {
           organization_id: invitation.organization_id,
           role: invitation.role,
         }, { onConflict: 'user_id,organization_id' })
+
+      // If the invitation included a specific project, also add the user to that project
+      const projectId = (invitation as any).project_id
+      if (projectId) {
+        try {
+          // project_members requires assigned_role; map organization role to a sensible project role
+          const assignedRole = (invitation.role === 'OWNER' ? 'SUPERINTENDENT' : (invitation.role as any))
+          const assignedBy = (invitation as any).invited_by || null
+
+          await supabase
+            .from('project_members')
+            .upsert([
+              {
+                project_id: projectId,
+                user_id: user.id,
+                organization_id: invitation.organization_id,
+                assigned_role: assignedRole,
+                assigned_at: new Date().toISOString(),
+                assigned_by: assignedBy,
+              },
+            ], { onConflict: 'project_id,user_id' })
+        } catch (err) {
+          // non-fatal: log and continue — organization membership succeeded
+          console.error('Error adding user to project_members on invite accept:', err)
+        }
+      }
     }
 
     redirect('/dashboard?welcome=true')
