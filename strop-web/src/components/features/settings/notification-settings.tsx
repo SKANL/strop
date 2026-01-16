@@ -19,32 +19,13 @@ interface NotificationSetting {
   push: boolean;
 }
 
-// NOTE: Removed hard-coded default notification preferences (mock data).
-// TODO: Load user-specific notification preferences from backend.
-// Backend options:
-// - Create a `user_settings` table (recommended) with columns: id, user_id, key, value (jsonb)
-// - Or store preferences in `users.metadata` JSONB under a `notification_preferences` key.
-// Example Supabase fetch (client-side):
-// const supabase = createBrowserClient()
-// const { data } = await supabase.from('user_settings').select('*').eq('user_id', currentUserId)
-// Map results into NotificationSetting[] and call `setSettings(mapped)`
-// When saving, prefer a small server-side endpoint or service to enforce RLS/audit.
-
-const defaultSettings: NotificationSetting[] = [];
-
 export function NotificationSettings({
   initialSettings,
 }: {
   initialSettings?: NotificationSetting[];
 }) {
-  const [settings, setSettings] = useState<NotificationSetting[]>(initialSettings ?? defaultSettings);
+  const [settings, setSettings] = useState<NotificationSetting[]>(initialSettings ?? []);
   const [isSubmitting, setIsSubmitting] = useState(false);
-
-  // TODO: On mount, fetch user's saved preferences from backend and call setSettings()
-  // Example server-side guidance:
-  // 1) If using `user_settings` table: SELECT key,value WHERE user_id = currentUserId
-  // 2) If using users.metadata: SELECT metadata->'notification_preferences' FROM users WHERE id = currentUserId
-  // 3) Map the stored structure into NotificationSetting[] and setSettings(mapped)
 
   const toggleSetting = (id: string, type: 'email' | 'push') => {
     setSettings(

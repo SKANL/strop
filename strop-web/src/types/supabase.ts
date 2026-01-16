@@ -676,6 +676,41 @@ export type Database = {
           },
         ]
       }
+      user_settings: {
+        Row: {
+          created_at: string | null
+          id: string
+          key: string
+          updated_at: string | null
+          user_id: string
+          value: Json
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          key: string
+          updated_at?: string | null
+          user_id: string
+          value?: Json
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          key?: string
+          updated_at?: string | null
+          user_id?: string
+          value?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_settings_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       users: {
         Row: {
           auth_id: string | null
@@ -816,6 +851,7 @@ export type BitacoraEntry = Tables<"bitacora_entries">
 export type BitacoraDayClosure = Tables<"bitacora_day_closures">
 export type Invitation = Tables<"invitations">
 export type AuditLog = Tables<"audit_logs">
+export type UserSetting = Tables<"user_settings">
 
 // Enum type aliases
 export type UserRole = Enums<"user_role">
