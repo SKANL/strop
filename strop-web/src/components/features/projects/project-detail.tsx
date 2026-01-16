@@ -35,6 +35,7 @@ import {
 import { Progress } from '@/components/ui/progress';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { ConfirmDialog } from '@/components/shared';
+import { AddProjectMemberModal } from './add-member-modal';
 import type { Project, ProjectStatus, User, Incident } from '@/types';
 
 interface ProjectDetailProps {
@@ -53,6 +54,7 @@ const statusConfig: Record<
 };
 
 export function ProjectDetail({ project, members, incidents }: ProjectDetailProps) {
+  const [showAddMember, setShowAddMember] = useState(false);
   const [showPauseDialog, setShowPauseDialog] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
 
@@ -236,7 +238,8 @@ export function ProjectDetail({ project, members, incidents }: ProjectDetailProp
         <TabsContent value="members" className="space-y-4">
           <div className="flex justify-between">
             <h3 className="text-lg font-medium">Miembros del equipo</h3>
-            <Button size="sm">Agregar miembro</Button>
+            <Button size="sm" onClick={() => setShowAddMember(true)}>Agregar miembro</Button>
+            <AddProjectMemberModal open={showAddMember} onOpenChange={setShowAddMember} projectId={project.id} />
           </div>
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             {members.map((member) => (

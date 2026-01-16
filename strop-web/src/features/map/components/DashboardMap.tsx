@@ -90,7 +90,7 @@ function MapLayers({ data }: DashboardMapProps) {
         source: 'projects',
         paint: {
           'circle-radius': 8,
-          'circle-color': '#3b82f6', // blue-500
+          'circle-color': '#22c55e', // green-500
           'circle-stroke-width': 2,
           'circle-stroke-color': '#ffffff',
         },
