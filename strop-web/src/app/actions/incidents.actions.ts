@@ -432,7 +432,7 @@ export async function getIncidentCommentsAction(
         id: c.id,
         text: c.text,
         author_name: (c.author as { full_name?: string } | null)?.full_name ?? 'Usuario',
-        created_at: c.created_at,
+        created_at: c.created_at ?? new Date().toISOString(),
       })),
     }
   } catch (error) {
