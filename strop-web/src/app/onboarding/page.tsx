@@ -123,7 +123,7 @@ export default function OnboardingPage() {
                   disabled={isLoading}
                   value={slug}
                   onChange={(e) => setSlug(e.target.value)}
-                  pattern="^[a-z0-9-]+$"
+                  pattern="^[a-z0-9\\-]+$"
                   title="Solo caracteres minúsculos, números y guiones"
                 />
                 <p className="text-xs text-muted-foreground">
