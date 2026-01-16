@@ -152,7 +152,7 @@ export default async function IncidentDetailPage({
                         {incident.photos.map((photo) => (
                           <div
                             key={photo.id}
-                            className="aspect-video rounded-lg overflow-hidden bg-muted cursor-pointer hover:opacity-90 transition-opacity"
+                            className="aspect-video relative rounded-lg overflow-hidden bg-muted cursor-pointer hover:opacity-90 transition-opacity"
                           >
                             <Image
                               src={photo.storage_path}
