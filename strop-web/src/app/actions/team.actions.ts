@@ -323,3 +323,137 @@ export async function resetUserPasswordAction(email: string): Promise<ActionResu
     return { success: false, error: message }
   }
 }
+
+/**
+ * Get user recent activity (incidents, bitacora entries)
+ */
+export async function getUserRecentActivityAction(userId: string): Promise<ActionResult<Array<{
+  action: string
+  time: string
+  type: 'incident' | 'bitacora'
+}>>> {
+  try {
+    const supabase = await createServerActionClient()
+    const authService = createAuthService(supabase)
+
+    const { data: profile, error: profileError } = await authService.getUserProfile()
+    if (profileError || !profile) return { success: false, error: 'Usuario no autenticado' }
+    if (!profile.current_organization_id) return { success: false, error: 'No hay organización seleccionada' }
+
+    const activities: Array<{ action: string; time: string; type: 'incident' | 'bitacora'; created_at: Date }> = []
+
+    // Get recent incidents created or closed by user
+    const { data: incidents } = await supabase
+      .from('incidents')
+      .select('id, title, status, created_at, closed_at, created_by, closed_by')
+      .eq('organization_id', profile.current_organization_id)
+      .or(`created_by.eq.${userId},closed_by.eq.${userId}`)
+      .order('created_at', { ascending: false })
+      .limit(5)
+
+    if (incidents) {
+      for (const incident of incidents) {
+        if (incident.created_by === userId && incident.created_at) {
+          activities.push({
+            action: 'Reportó una incidencia',
+            time: incident.created_at,
+            type: 'incident',
+            created_at: new Date(incident.created_at)
+          })
+        }
+        if (incident.closed_by === userId && incident.closed_at) {
+          activities.push({
+            action: 'Cerró una incidencia',
+            time: incident.closed_at,
+            type: 'incident',
+            created_at: new Date(incident.closed_at)
+          })
+        }
+      }
+    }
+
+    // Get recent bitacora entries
+    const { data: entries } = await supabase
+      .from('bitacora_entries')
+      .select('id, title, created_at, source')
+      .eq('organization_id', profile.current_organization_id)
+      .eq('created_by', userId)
+      .order('created_at', { ascending: false })
+      .limit(5)
+
+    if (entries) {
+      for (const entry of entries) {
+        if (entry.created_at) {
+          activities.push({
+            action: 'Agregó entrada a bitácora',
+            time: entry.created_at,
+            type: 'bitacora',
+            created_at: new Date(entry.created_at)
+          })
+        }
+      }
+    }
+
+    // Sort by date descending and take top 5
+    activities.sort((a, b) => b.created_at.getTime() - a.created_at.getTime())
+    const recentActivities = activities.slice(0, 5).map(({ action, time, type }) => ({ action, time, type }))
+
+    return { success: true, data: recentActivities }
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Error inesperado'
+    console.error('getUserRecentActivityAction error:', err)
+    return { success: false, error: message }
+  }
+}
+
+/**
+ * Get user statistics (incidents, bitacora entries counts)
+ */
+export async function getUserStatsAction(userId: string): Promise<ActionResult<{
+  incidentsReported: number
+  incidentsClosed: number
+  bitacoraEntries: number
+}>> {
+  try {
+    const supabase = await createServerActionClient()
+    const authService = createAuthService(supabase)
+
+    const { data: profile, error: profileError } = await authService.getUserProfile()
+    if (profileError || !profile) return { success: false, error: 'Usuario no autenticado' }
+    if (!profile.current_organization_id) return { success: false, error: 'No hay organización seleccionada' }
+
+    // Count incidents reported
+    const { count: reported } = await supabase
+      .from('incidents')
+      .select('*', { count: 'exact', head: true })
+      .eq('organization_id', profile.current_organization_id)
+      .eq('created_by', userId)
+
+    // Count incidents closed
+    const { count: closed } = await supabase
+      .from('incidents')
+      .select('*', { count: 'exact', head: true })
+      .eq('organization_id', profile.current_organization_id)
+      .eq('closed_by', userId)
+
+    // Count bitacora entries
+    const { count: entries } = await supabase
+      .from('bitacora_entries')
+      .select('*', { count: 'exact', head: true })
+      .eq('organization_id', profile.current_organization_id)
+      .eq('created_by', userId)
+
+    return {
+      success: true,
+      data: {
+        incidentsReported: reported ?? 0,
+        incidentsClosed: closed ?? 0,
+        bitacoraEntries: entries ?? 0,
+      },
+    }
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Error inesperado'
+    console.error('getUserStatsAction error:', err)
+    return { success: false, error: message }
+  }
+}

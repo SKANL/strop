@@ -31,10 +31,21 @@ import { ConfirmDialog } from '@/components/shared';
 import { toast } from 'sonner';
 import { deactivateTeamMemberAction, resetUserPasswordAction } from '@/app/actions/team.actions';
 import type { User, UserRole } from '@/types';
+import { formatDistanceToNow } from 'date-fns';
 
 interface UserDetailProps {
   user: User & {
     projects?: { id: string; name: string }[];
+  };
+  recentActivity?: Array<{
+    action: string;
+    time: string;
+    type: 'incident' | 'bitacora';
+  }>;
+  stats?: {
+    incidentsReported: number;
+    incidentsClosed: number;
+    bitacoraEntries: number;
   };
 }
 
@@ -45,7 +56,7 @@ const roleLabels: Record<UserRole, { label: string; color: string }> = {
   CABO: { label: 'Cabo', color: 'bg-orange-500' },
 };
 
-export function UserDetail({ user }: UserDetailProps) {
+export function UserDetail({ user, recentActivity = [], stats }: UserDetailProps) {
   const router = useRouter();
   const [showDeactivateConfirm, setShowDeactivateConfirm] = useState(false);
   const [showResetPasswordConfirm, setShowResetPasswordConfirm] = useState(false);
@@ -218,29 +229,31 @@ export function UserDetail({ user }: UserDetailProps) {
               <CardTitle className="text-base">Actividad reciente</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="space-y-4 text-sm">
-                <div className="flex gap-3">
-                  <div className="h-2 w-2 rounded-full bg-green-500 mt-1.5" />
-                  <div>
-                    <p>Cerró una incidencia</p>
-                    <p className="text-xs text-muted-foreground">Hace 2 horas</p>
-                  </div>
+              {recentActivity.length > 0 ? (
+                <div className="space-y-4 text-sm">
+                  {recentActivity.map((activity, idx) => {
+                    const colorMap = {
+                      incident: activity.action.includes('Cerró') ? 'bg-green-500' : 'bg-orange-500',
+                      bitacora: 'bg-blue-500',
+                    };
+                    return (
+                      <div key={idx} className="flex gap-3">
+                        <div className={`h-2 w-2 rounded-full ${colorMap[activity.type]} mt-1.5`} />
+                        <div>
+                          <p>{activity.action}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {formatDistanceToNow(new Date(activity.time), { addSuffix: true, locale: es })}
+                          </p>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
-                <div className="flex gap-3">
-                  <div className="h-2 w-2 rounded-full bg-blue-500 mt-1.5" />
-                  <div>
-                    <p>Agregó entrada a bitácora</p>
-                    <p className="text-xs text-muted-foreground">Hace 4 horas</p>
-                  </div>
-                </div>
-                <div className="flex gap-3">
-                  <div className="h-2 w-2 rounded-full bg-orange-500 mt-1.5" />
-                  <div>
-                    <p>Reportó una incidencia</p>
-                    <p className="text-xs text-muted-foreground">Ayer</p>
-                  </div>
-                </div>
-              </div>
+              ) : (
+                <p className="text-sm text-muted-foreground text-center py-4">
+                  No hay actividad reciente
+                </p>
+              )}
             </CardContent>
           </Card>
 
@@ -252,15 +265,15 @@ export function UserDetail({ user }: UserDetailProps) {
               <div className="space-y-3">
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Incidencias reportadas</span>
-                  <span className="font-medium">12</span>
+                  <span className="font-medium">{stats?.incidentsReported ?? 0}</span>
                 </div>
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Incidencias cerradas</span>
-                  <span className="font-medium">8</span>
+                  <span className="font-medium">{stats?.incidentsClosed ?? 0}</span>
                 </div>
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Entradas en bitácora</span>
-                  <span className="font-medium">45</span>
+                  <span className="font-medium">{stats?.bitacoraEntries ?? 0}</span>
                 </div>
               </div>
             </CardContent>

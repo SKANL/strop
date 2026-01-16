@@ -7,7 +7,7 @@ import { ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { UserDetail } from '@/components/features/team';
 import SetBreadcrumbs from '@/components/layout/set-breadcrumbs';
-import { getTeamMemberAction } from '@/app/actions/team.actions';
+import { getTeamMemberAction, getUserRecentActivityAction, getUserStatsAction } from '@/app/actions/team.actions';
 import type { User } from '@/types';
 
 export default async function TeamMemberDetailPage({
@@ -16,8 +16,15 @@ export default async function TeamMemberDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const result = await getTeamMemberAction(id);
-  if (!result.success || !result.data) {
+  
+  // Load user data, activity and stats in parallel
+  const [userResult, activityResult, statsResult] = await Promise.all([
+    getTeamMemberAction(id),
+    getUserRecentActivityAction(id),
+    getUserStatsAction(id),
+  ]);
+  
+  if (!userResult.success || !userResult.data) {
     return (
       <div className="flex flex-col items-center justify-center h-96">
         <p className="text-muted-foreground">Usuario no encontrado</p>
@@ -28,7 +35,15 @@ export default async function TeamMemberDetailPage({
     );
   }
 
-  const user = result.data as User & { projects: { id: string; name: string }[] };
+  const user = userResult.data as User & { 
+    projects: { id: string; name: string }[] 
+  };
+  const recentActivity = activityResult.success ? activityResult.data ?? [] : [];
+  const stats = statsResult.success ? statsResult.data : {
+    incidentsReported: 0,
+    incidentsClosed: 0,
+    bitacoraEntries: 0,
+  };
 
   return (
     <div className="flex flex-col gap-6">
@@ -52,7 +67,7 @@ export default async function TeamMemberDetailPage({
         </h1>
       </div>
 
-      <UserDetail user={user} />
+      <UserDetail user={user} recentActivity={recentActivity} stats={stats} />
     </div>
   );
 }
