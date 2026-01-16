@@ -27,7 +27,6 @@ import { updateOrganizationAction, uploadOrganizationLogoAction } from '@/app/ac
 const organizationFormSchema = z.object({
   name: z.string().min(2, 'El nombre debe tener al menos 2 caracteres'),
   slug: z.string().min(2, 'El slug debe tener al menos 2 caracteres'),
-  billing_email: z.string().email('Ingresa un correo válido').optional().or(z.literal('')),
 });
 
 type OrganizationFormValues = z.infer<typeof organizationFormSchema>;
@@ -54,7 +53,6 @@ export function OrganizationSettings({
     defaultValues: {
       name: '',
       slug: '',
-      billing_email: '',
     },
   });
 
@@ -71,7 +69,6 @@ export function OrganizationSettings({
       form.reset({
         name: initialData.name,
         slug: initialData.slug,
-        billing_email: initialData.billing_email || '',
       });
 
       setLoading(false);
@@ -112,7 +109,6 @@ export function OrganizationSettings({
         form.reset({
           name: org.name,
           slug: org.slug,
-          billing_email: org.billing_email || '',
         });
       } catch (error) {
         console.error('Error fetching organization:', error);
@@ -133,7 +129,6 @@ export function OrganizationSettings({
       const result = await updateOrganizationAction(currentOrg.id, {
         name: data.name,
         slug: data.slug,
-        billing_email: data.billing_email || null,
       });
       
       if (!result.success) {
@@ -146,7 +141,6 @@ export function OrganizationSettings({
         ...prev, 
         name: data.name,
         slug: data.slug,
-        billing_email: data.billing_email || null,
       } : null);
     } catch (error) {
       console.error('Error updating organization:', error);
@@ -308,23 +302,6 @@ export function OrganizationSettings({
                     )}
                   />
                 </div>
-
-                <FormField
-                  control={form.control}
-                  name="billing_email"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Email de facturación</FormLabel>
-                      <FormControl>
-                        <Input type="email" placeholder="billing@example.com" {...field} />
-                      </FormControl>
-                      <FormDescription>
-                        Email para recibir facturas y notificaciones
-                      </FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
               </CardContent>
             </Card>
 

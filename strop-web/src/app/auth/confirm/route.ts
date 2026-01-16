@@ -12,7 +12,7 @@ export async function GET(request: NextRequest) {
   const requestUrl = new URL(request.url)
   const token_hash = requestUrl.searchParams.get('token_hash')
   const type = requestUrl.searchParams.get('type')
-  const next = requestUrl.searchParams.get('next') ?? '/dashboard'
+  const next = requestUrl.searchParams.get('next')
 
   if (token_hash && type) {
     const supabase = await createRouteHandlerClient()
@@ -37,8 +37,14 @@ export async function GET(request: NextRequest) {
     if (type === 'recovery') {
       return NextResponse.redirect(new URL('/reset-password', requestUrl.origin))
     }
+
+    // For email confirmation (signup), redirect to success page
+    if (type === 'email' || type === 'signup') {
+      return NextResponse.redirect(new URL('/email-confirmed', requestUrl.origin))
+    }
   }
 
-  // Redirect to the requested page or dashboard
-  return NextResponse.redirect(new URL(next, requestUrl.origin))
+  // Redirect to the requested page or onboarding for new users
+  const redirectUrl = next ?? '/onboarding'
+  return NextResponse.redirect(new URL(redirectUrl, requestUrl.origin))
 }

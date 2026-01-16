@@ -103,6 +103,28 @@ export async function signOutAction(): Promise<void> {
 }
 
 /**
+ * Resend confirmation email
+ */
+export async function resendConfirmationEmailAction(
+  email: string
+): Promise<ActionResult> {
+  if (!email) {
+    return { success: false, error: 'Email is required' }
+  }
+
+  const supabase = await createServerActionClient()
+  const authService = createAuthService(supabase)
+
+  const { error } = await authService.resendConfirmationEmail(email)
+
+  if (error) {
+    return { success: false, error: error.message }
+  }
+
+  return { success: true }
+}
+
+/**
  * Request password reset
  */
 export async function resetPasswordAction(
@@ -167,7 +189,6 @@ export async function completeOnboardingAction(
 ): Promise<ActionResult> {
   const organizationName = formData.get('organizationName') as string
   const organizationSlug = formData.get('organizationSlug') as string
-  const plan = (formData.get('plan') as string) ?? 'STARTER'
 
   if (!organizationName || !organizationSlug) {
     return { success: false, error: 'Organization name and slug are required' }
@@ -177,11 +198,10 @@ export async function completeOnboardingAction(
     const supabase = await createServerActionClient()
     const organizationsService = createOrganizationsService(supabase)
 
-    // Create organization using RPC function
+    // Create organization using RPC function (plan will default to STARTER in the service)
     const { data: organizationId, error: orgError } = await organizationsService.createOrganization(
       organizationName,
-      organizationSlug,
-      plan as 'STARTER' | 'PROFESSIONAL' | 'ENTERPRISE'
+      organizationSlug
     )
 
     if (orgError || !organizationId) {

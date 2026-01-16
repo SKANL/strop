@@ -42,8 +42,9 @@ function RegisterFormContent() {
       const result = await signUpAction(formData);
 
       if (result.success) {
-        toast.success('¡Cuenta creada! Revisa tu email para confirmar tu cuenta.');
-        router.push('/login');
+        const email = formData.get('email') as string;
+        toast.success('¡Cuenta creada exitosamente!');
+        router.push(`/verify-email?email=${encodeURIComponent(email)}`);
       } else {
         toast.error(result.error || 'Error al crear la cuenta');
       }

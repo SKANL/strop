@@ -11,6 +11,8 @@ export {
   signOutAction,
   resetPasswordAction,
   updatePasswordAction,
+  resendConfirmationEmailAction,
+  completeOnboardingAction,
 } from './auth.actions'
 
 // Project actions

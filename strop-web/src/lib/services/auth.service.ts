@@ -154,6 +154,20 @@ export class AuthService {
   }
 
   /**
+   * Resend email confirmation
+   */
+  async resendConfirmationEmail(
+    email: string
+  ): Promise<AuthResult<void>> {
+    const { error } = await this.client.auth.resend({
+      type: 'signup',
+      email: email,
+    })
+
+    return { data: undefined, error }
+  }
+
+  /**
    * Send password reset email
    */
   async resetPasswordForEmail(

@@ -14,13 +14,6 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { toast } from 'sonner';
 import { completeOnboardingAction } from '@/app/actions/auth.actions';
 
@@ -124,41 +117,11 @@ export default function OnboardingPage() {
                   value={slug}
                   onChange={(e) => setSlug(e.target.value)}
                   pattern="^[a-z0-9\\-]+$"
-                  title="Solo caracteres minúsculos, números y guiones"
+                  title="Solo letras minúsculas, números y guiones"
                 />
                 <p className="text-xs text-muted-foreground">
                   Se usará en URLs de tu organización
                 </p>
-              </div>
-
-              {/* Plan Selection */}
-              <div className="space-y-2">
-                <Label htmlFor="plan">Plan</Label>
-                <Select defaultValue="STARTER" name="plan">
-                  <SelectTrigger id="plan" disabled={isLoading}>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="STARTER">
-                      <div>
-                        <p className="font-medium">Starter</p>
-                        <p className="text-xs text-muted-foreground">Para empezar</p>
-                      </div>
-                    </SelectItem>
-                    <SelectItem value="PROFESSIONAL">
-                      <div>
-                        <p className="font-medium">Professional</p>
-                        <p className="text-xs text-muted-foreground">Para crecer</p>
-                      </div>
-                    </SelectItem>
-                    <SelectItem value="ENTERPRISE">
-                      <div>
-                        <p className="font-medium">Enterprise</p>
-                        <p className="text-xs text-muted-foreground">Para escalar</p>
-                      </div>
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
               </div>
 
               {/* Submit Button */}

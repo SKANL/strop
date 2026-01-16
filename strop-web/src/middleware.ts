@@ -27,6 +27,9 @@ const PROTECTED_ROUTES = [
 // Rutas que deben redirigir a dashboard si ya está autenticado
 const AUTH_ROUTES = ['/login', '/register']
 
+// Rutas públicas que no requieren autenticación
+const PUBLIC_ROUTES = ['/verify-email', '/email-confirmed']
+
 export async function middleware(request: NextRequest) {
   let supabaseResponse = NextResponse.next({
     request,
@@ -64,6 +67,14 @@ export async function middleware(request: NextRequest) {
   } = await supabase.auth.getUser()
 
   const pathname = request.nextUrl.pathname
+
+  // Check if the route is public (doesn't require auth check)
+  const isPublicRoute = PUBLIC_ROUTES.some((route) => pathname.startsWith(route))
+
+  // Allow public routes without authentication
+  if (isPublicRoute) {
+    return supabaseResponse
+  }
 
   // Check if the route is protected
   const isProtectedRoute = PROTECTED_ROUTES.some((route) =>
