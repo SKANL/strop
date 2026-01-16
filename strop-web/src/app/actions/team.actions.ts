@@ -137,21 +137,10 @@ export async function getTeamMembersAction(): Promise<ActionResult<TeamMember[]>
       return { success: false, error: 'No hay organización seleccionada', data: [] }
     }
 
-    // Get organization members
+    // Get organization members with user details
     const { data: members, error } = await supabase
       .from('organization_members')
-      .select(
-        `
-        user_id,
-        role,
-        users!organization_members_user_id_fkey (
-          id,
-          email,
-          full_name,
-          is_active
-        )
-      `
-      )
+      .select('user_id, role')
       .eq('organization_id', profile.current_organization_id)
 
     if (error) {
@@ -159,9 +148,17 @@ export async function getTeamMembersAction(): Promise<ActionResult<TeamMember[]>
       return { success: false, error: error.message, data: [] }
     }
 
-    // Get project counts for each member
+    // Get user details and project counts for each member
     const teamMembers = await Promise.all(
       (members || []).map(async (member: any) => {
+        // Get user details
+        const { data: user } = await supabase
+          .from('users')
+          .select('id, email, full_name, is_active')
+          .eq('id', member.user_id)
+          .single()
+
+        // Get project count
         const { count } = await supabase
           .from('project_members')
           .select('id', { count: 'exact', head: true })
@@ -169,11 +166,11 @@ export async function getTeamMembersAction(): Promise<ActionResult<TeamMember[]>
 
         return {
           id: member.user_id,
-          name: member.users?.full_name || 'Usuario',
-          email: member.users?.email || '',
+          name: user?.full_name || 'Usuario',
+          email: user?.email || '',
           role: member.role as UserRole,
           projects: count ?? 0,
-          isActive: member.users?.is_active ?? true,
+          isActive: user?.is_active ?? true,
         }
       })
     )
