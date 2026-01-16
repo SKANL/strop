@@ -87,6 +87,12 @@ async function getLayoutData() {
     
     if (membership) {
       user.role = membership.role as User['role'];
+      
+      // Restrict access to web platform for non-OWNER roles
+      // Only OWNERS are allowed to access the dashboard
+      if (user.role !== 'OWNER') {
+        redirect('/mobile-only');
+      }
     }
   }
   
