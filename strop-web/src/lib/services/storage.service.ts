@@ -198,6 +198,11 @@ export class StorageService extends BaseService<'photos'> {
     expirationSeconds?: number
   ): Promise<ServiceResult<string>> {
     try {
+      // If path is a full URL (external), return it directly
+      if (storagePath.startsWith('http')) {
+        return { data: storagePath, error: null }
+      }
+
       const { data, error } = await this.client.storage
         .from(STORAGE_BUCKET)
         .createSignedUrl(storagePath, expirationSeconds ?? SIGNED_URL_EXPIRATION)
@@ -248,13 +253,21 @@ export class StorageService extends BaseService<'photos'> {
       // Generate signed URLs for all photos
       const photosWithUrls: UploadedPhoto[] = await Promise.all(
         (photos ?? []).map(async (photo) => {
-          const { data: signedUrlData } = await this.client.storage
-            .from(STORAGE_BUCKET)
-            .createSignedUrl(photo.storage_path, SIGNED_URL_EXPIRATION)
+          // If path is external, use it directly. Otherwise sign it.
+          const isExternal = photo.storage_path.startsWith('http')
+          
+          let signedUrl = photo.storage_path
+          
+          if (!isExternal) {
+            const { data: signedUrlData } = await this.client.storage
+              .from(STORAGE_BUCKET)
+              .createSignedUrl(photo.storage_path, SIGNED_URL_EXPIRATION)
+            signedUrl = signedUrlData?.signedUrl || ''
+          }
 
           return {
             ...photo,
-            signedUrl: signedUrlData?.signedUrl,
+            signedUrl,
           }
         })
       )

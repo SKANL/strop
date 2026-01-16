@@ -38,9 +38,9 @@ export default async function BitacoraPage() {
       {/* Page header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Bitácora de Obra (BESOP)</h1>
+          <h1 className="text-3xl font-bold tracking-tight">Bitácora de Obra</h1>
           <p className="text-muted-foreground">
-            Registro legal obligatorio por proyecto - Selecciona un proyecto para continuar
+            Registro por proyecto - Selecciona un proyecto para continuar
           </p>
         </div>
       </div>
