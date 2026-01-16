@@ -59,7 +59,7 @@ interface OfficialComposerProps {
   entries: BitacoraEntry[];
   projectName: string;
   date: Date;
-  onClosureSuccess?: () => void;
+  onClosureSuccess?: (data: { official_content: string; pin?: string }) => Promise<void>;
 }
 
 export function OfficialComposer({
@@ -93,30 +93,17 @@ export function OfficialComposer({
   async function onSubmit(data: ClosureFormValues) {
     setIsSubmitting(true);
     try {
-      // TODO: Persist official day closure using BitacoraService.closeDay
-      // Guidance (Supabase):
-      // const supabase = createBrowserClient()
-      // const bitacoraService = createBitacoraService(supabase)
-      // await bitacoraService.closeDay({
-      //   organization_id: currentOrgId,
-      //   project_id: currentProjectId,
-      //   closure_date: format(date, 'yyyy-MM-dd'),
-      //   official_content: data.official_content,
-      //   pin_hash: optionalHash(data.pin),
-      //   closed_by: currentUserId,
-      // })
-      // Important: Creating a day closure should also lock related entries. Prefer
-      // a server-side endpoint that performs the insert + locks in a single transaction.
-
-      toast.success('Día cerrado oficialmente (TODO: persistir en backend)', {
-        description: 'El documento tiene validez legal y es inmutable',
+      await onClosureSuccess?.({
+        official_content: data.official_content,
+        pin: data.pin || undefined,
       });
-
-      onClosureSuccess?.();
-      onOpenChange(false);
+      
+      // Success notification and navigation handled by parent
       form.reset();
-    } catch {
-      toast.error('Error al cerrar el día');
+    } catch (error) {
+      toast.error('Error al cerrar el día', {
+        description: error instanceof Error ? error.message : 'Intenta nuevamente',
+      });
     } finally {
       setIsSubmitting(false);
     }

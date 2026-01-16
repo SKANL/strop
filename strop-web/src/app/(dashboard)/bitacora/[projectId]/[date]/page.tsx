@@ -1,19 +1,11 @@
 import Link from 'next/link';
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { ArrowLeft, Plus, CheckSquare, FileText, Lock, Calendar } from 'lucide-react';
 
 import SetBreadcrumbs from '@/components/layout/set-breadcrumbs';
-// Breadcrumb rendered in header now
 import { Button } from '@/components/ui/button';
-import {
-  DailyTimeline,
-  LogDetail,
-  BitacoraFilters,
-} from '@/components/features/bitacora';
-import { ManualEntryDialog } from '@/components/features/bitacora/manual-entry-dialog';
-import { OfficialComposer } from '@/components/features/bitacora/official-composer';
 import { getBitacoraEntriesAction } from '@/app/actions/bitacora.actions';
+import { BitacoraDayClient } from '@/components/features/bitacora/bitacora-day-client';
 
 export const dynamic = 'force-dynamic';
 
@@ -45,7 +37,6 @@ export default async function BitacoraDayPage({
     currentDate = new Date();
   }
 
-  // Initial UI state for client components will be handled client-side; pass entries as props
   return (
     <div className="flex flex-col gap-6">
       <SetBreadcrumbs
@@ -57,32 +48,13 @@ export default async function BitacoraDayPage({
         ]}
       />
 
-      {/* Filtros */}
-      <BitacoraFilters
-        onFiltersChange={() => {}}
-        showDateFilter={false}
-      />
-
-      {/* Header placeholder: interactive controls handled in client components */}
-      <div className="flex items-center gap-2">
-        {/* Client components will render their own interactive controls */}
-      </div>
-
-      <DailyTimeline
+      <BitacoraDayClient
+        projectId={projectId}
+        projectName={project.name}
         date={currentDate}
-        entries={entries as any}
-        onDateChange={() => {}}
-        onEntryClick={undefined}
-        selectable={false}
-        selectedEntries={[]}
-        onSelect={() => {}}
+        initialEntries={entries as any}
         isClosed={isClosed}
       />
-
-      {/* Modals: included so client layer can hydrate them as needed */}
-      <LogDetail entry={null as any} open={false} onClose={() => {}} />
-      <ManualEntryDialog open={false} onOpenChange={() => {}} projectId={projectId} date={currentDate} />
-      <OfficialComposer open={false} onOpenChange={() => {}} entries={[]} projectName={project.name} date={currentDate} onClosureSuccess={() => {}} />
     </div>
   );
 }

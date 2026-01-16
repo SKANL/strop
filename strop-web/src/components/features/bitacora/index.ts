@@ -7,3 +7,4 @@ export { OfficialComposer } from './official-composer';
 export { DocumentGenerator } from './document-generator';
 export { DayClosureDialog } from './day-closure-dialog';
 export { ManualEntryDialog } from './manual-entry-dialog';
+export { BitacoraDayClient } from './bitacora-day-client';
