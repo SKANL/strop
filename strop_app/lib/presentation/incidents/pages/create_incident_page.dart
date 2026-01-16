@@ -6,6 +6,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
+import 'dart:io';
+
+import 'package:strop_app/core/utils/file_validators.dart';
 
 import 'package:strop_app/core/theme/app_colors.dart';
 import 'package:strop_app/core/theme/app_shadows.dart';
@@ -252,15 +255,9 @@ class _CreateIncidentPageState extends State<CreateIncidentPage> {
           // Description with voice button
           TextFormField(
             controller: _descriptionController,
-            decoration: InputDecoration(
+            decoration: const InputDecoration(
               labelText: 'Descripción',
               hintText: 'Describe el incidente en detalle...',
-              suffixIcon: IconButton(
-                icon: const Icon(Icons.mic, color: AppColors.accent),
-                onPressed: () {
-                  // TODO(developer): Voice to text
-                },
-              ),
             ),
             maxLines: 4,
             textCapitalization: TextCapitalization.sentences,
@@ -406,21 +403,6 @@ class _CreateIncidentPageState extends State<CreateIncidentPage> {
                 ),
               ),
               const SizedBox(width: 8),
-              Container(
-                decoration: BoxDecoration(
-                  color: AppColors.accent.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: IconButton(
-                  icon: const Icon(
-                    Icons.qr_code_scanner,
-                    color: AppColors.accent,
-                  ),
-                  onPressed: () {
-                    // TODO(developer): QR scanner
-                  },
-                ),
-              ),
             ],
           ),
           const SizedBox(height: 32),
@@ -742,6 +724,15 @@ class _CreateIncidentPageState extends State<CreateIncidentPage> {
     );
 
     if (image != null) {
+      final file = File(image.path);
+      final error = await FileValidators.validateImageFile(file);
+      if (error != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(error)),
+        );
+        return;
+      }
+
       setState(() {
         _photos.add(image.path);
       });

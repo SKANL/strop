@@ -1,6 +1,8 @@
 // Home Page - Smart Feed Dashboard
 // lib/presentation/home/pages/home_page.dart
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
@@ -11,13 +13,45 @@ import 'package:strop_app/domain/entities/entities.dart';
 import 'package:strop_app/presentation/auth/bloc/auth_bloc.dart';
 import 'package:strop_app/presentation/auth/bloc/auth_state.dart';
 import 'package:strop_app/presentation/home/bloc/home_bloc.dart';
+import 'package:strop_app/presentation/profile/bloc/profile_bloc.dart';
+import 'package:strop_app/presentation/profile/bloc/profile_event.dart';
+import 'package:strop_app/presentation/profile/bloc/profile_state.dart';
 import 'package:strop_app/presentation/home/widgets/sync_status_indicator.dart';
 import 'package:strop_app/presentation/shared/widgets/strop_action_button.dart';
 import 'package:strop_app/presentation/shared/widgets/strop_dashboard_card.dart';
 
 /// Home page with smart feed dashboard
-class HomePage extends StatelessWidget {
+class HomePage extends StatefulWidget {
   const HomePage({super.key});
+
+  @override
+  State<HomePage> createState() => _HomePageState();
+}
+
+class _HomePageState extends State<HomePage> {
+  late final StreamSubscription _authSub;
+
+  @override
+  void initState() {
+    super.initState();
+    final authBloc = context.read<AuthBloc>();
+    final current = authBloc.state.user;
+    if (current != null) {
+      context.read<ProfileBloc>().add(ProfileLoadRequested(current.id));
+    }
+    _authSub = authBloc.stream.listen((state) {
+      final user = (state as AuthState).user;
+      if (user != null) {
+        context.read<ProfileBloc>().add(ProfileLoadRequested(user.id));
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _authSub.cancel();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -31,15 +65,21 @@ class HomePage extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // Header with user greeting
+              // Header with user greeting — now listens to ProfileBloc so
+              // changes to the profile update the UI immediately.
               BlocBuilder<AuthBloc, AuthState>(
                 builder: (context, state) {
-                  // Fallback user or loading state handling could go here.
-                  // Assuming authenticated for now as per routing.
                   final user = state.user;
-                  if (user == null)
-                    return const SizedBox(height: 100); // Or shimmering
-                  return _buildHeader(context, user);
+                  if (user == null) return const SizedBox(height: 100);
+
+                  return BlocBuilder<ProfileBloc, ProfileState>(
+                    builder: (context, profileState) {
+                      if (profileState is ProfileLoaded) {
+                        return _buildHeader(context, profileState.user);
+                      }
+                      return _buildHeader(context, user);
+                    },
+                  );
                 },
               ),
 
@@ -212,34 +252,7 @@ class HomePage extends StatelessWidget {
   }
 
   Widget _buildQuickAccess(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-      child: Row(
-        children: [
-          Expanded(
-            child: StropActionButton(
-              icon: Icons.mic,
-              label: 'Nota de voz',
-              color: AppColors.primary,
-              onTap: () {
-                // TODO: Voice note quick action
-              },
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: StropActionButton(
-              icon: Icons.qr_code_scanner,
-              label: 'Escanear QR',
-              color: AppColors.accent,
-              onTap: () {
-                // TODO: QR scanner quick action
-              },
-            ),
-          ),
-        ],
-      ),
-    );
+    return const SizedBox.shrink();
   }
 
   Widget _buildRecentActivityHeader(BuildContext context) {

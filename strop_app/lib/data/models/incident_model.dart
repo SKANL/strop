@@ -1,6 +1,5 @@
 import 'package:strop_app/domain/entities/entities.dart';
 import 'package:strop_app/domain/entities/enums.dart';
-import 'package:strop_app/domain/entities/user.dart';
 import 'package:strop_app/data/models/user_model.dart';
 
 class IncidentModel extends Incident {

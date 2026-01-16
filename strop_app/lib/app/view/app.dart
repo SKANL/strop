@@ -1,11 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:strop_app/core/di/injection_container.dart';
+import 'package:strop_app/domain/repositories/auth_repository.dart';
+import 'package:strop_app/domain/repositories/project_repository.dart';
+import 'package:strop_app/domain/repositories/incident_repository.dart';
 import 'package:strop_app/core/router/app_router.dart';
 import 'package:strop_app/core/theme/app_theme.dart';
 import 'package:strop_app/presentation/auth/bloc/auth_bloc.dart';
 import 'package:strop_app/presentation/auth/bloc/auth_event.dart';
 import 'package:strop_app/presentation/projects/bloc/project_bloc.dart';
+import 'package:strop_app/presentation/profile/bloc/profile_bloc.dart';
 import 'package:strop_app/presentation/home/bloc/home_bloc.dart';
 
 class App extends StatelessWidget {
@@ -13,20 +17,35 @@ class App extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MultiBlocProvider(
+    return MultiRepositoryProvider(
       providers: [
-        BlocProvider<AuthBloc>(
-          create: (_) =>
-              sl<AuthBloc>()..add(AuthCheckRequested()), // Injected via GetIt
+        RepositoryProvider<AuthRepository>(
+          create: (_) => sl<AuthRepository>(),
         ),
-        BlocProvider<ProjectBloc>(
-          create: (_) => sl<ProjectBloc>()..add(ProjectStarted()),
+        RepositoryProvider<ProjectRepository>(
+          create: (_) => sl<ProjectRepository>(),
         ),
-        BlocProvider<HomeBloc>(
-          create: (_) => sl<HomeBloc>()..add(HomeStarted()),
+        RepositoryProvider<IncidentRepository>(
+          create: (_) => sl<IncidentRepository>(),
         ),
       ],
-      child: const AppView(),
+      child: MultiBlocProvider(
+        providers: [
+          BlocProvider<AuthBloc>(
+            create: (_) => sl<AuthBloc>()..add(AuthCheckRequested()),
+          ),
+          BlocProvider<ProfileBloc>(
+            create: (_) => sl<ProfileBloc>(),
+          ),
+          BlocProvider<ProjectBloc>(
+            create: (_) => sl<ProjectBloc>()..add(ProjectStarted()),
+          ),
+          BlocProvider<HomeBloc>(
+            create: (_) => sl<HomeBloc>()..add(HomeStarted()),
+          ),
+        ],
+        child: const AppView(),
+      ),
     );
   }
 }

@@ -17,7 +17,7 @@ class SupabaseProjectRepository implements ProjectRepository {
       logger.d('RPC: Executing get_my_projects...');
       // Use RPC for optimized query with pre-calculated counts
       // get_my_projects() returns projects for the current user with member_count and open_incidents_count
-      final response = await _supabase.rpc('get_my_projects');
+      final response = await _supabase.rpc<dynamic>('get_my_projects');
 
       final projects = (response as List).map((json) {
         return ProjectModel.fromJson(json as Map<String, dynamic>);

@@ -2,8 +2,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:equatable/equatable.dart';
 import 'package:strop_app/domain/entities/entities.dart';
 import 'package:strop_app/domain/repositories/incident_repository.dart';
-import 'package:strop_app/domain/repositories/project_repository.dart';
-import 'package:supabase_flutter/supabase_flutter.dart'; // For User access or pass via AuthBloc
+// removed unused imports
 
 // Events
 abstract class HomeEvent extends Equatable {

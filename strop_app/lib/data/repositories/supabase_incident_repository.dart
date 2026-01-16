@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:strop_app/core/utils/file_validators.dart';
 import 'package:strop_app/data/models/comment_model.dart';
 import 'package:strop_app/data/models/incident_model.dart';
 import 'package:strop_app/domain/entities/entities.dart';
@@ -80,7 +81,7 @@ class SupabaseIncidentRepository implements IncidentRepository {
     try {
       logger.d('RPC: Executing get_dashboard_stats...');
       // Use RPC for optimized single-query performance
-      final response = await _supabase.rpc('get_dashboard_stats');
+      final response = await _supabase.rpc<dynamic>('get_dashboard_stats');
       logger.d('RPC: get_dashboard_stats success. Response: $response');
 
       if (response == null) return {'pending': 0, 'critical': 0};
@@ -220,6 +221,18 @@ class SupabaseIncidentRepository implements IncidentRepository {
       logger.d('Storage: Uploading photo to $storagePath');
 
       final file = File(filePath);
+
+      // Validate file before uploading
+      try {
+        final error = await FileValidators.validateImageFile(file);
+        if (error != null) {
+          throw Exception('Validación de archivo fallida: $error');
+        }
+      } catch (e) {
+        logger.e('File validation failed before upload', error: e);
+        rethrow;
+      }
+
       await _supabase.storage
           .from('incident-photos')
           .upload(
