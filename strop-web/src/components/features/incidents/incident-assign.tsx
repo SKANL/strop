@@ -5,9 +5,11 @@ import { Check, Loader2 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import {
-  Popover,
-  PopoverContent,
-} from '@/components/ui/popover';
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import {
   Command,
   CommandEmpty,
@@ -79,11 +81,14 @@ export function IncidentAssign({ open, onOpenChange, incidentId }: IncidentAssig
   };
 
   return (
-    <Popover open={open} onOpenChange={onOpenChange}>
-      <PopoverContent className="w-80 p-0" align="end">
-        <Command>
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-[400px] p-0 overflow-hidden">
+        <DialogHeader className="px-4 py-3 border-b">
+          <DialogTitle>Asignar incidencia</DialogTitle>
+        </DialogHeader>
+        <Command className="border-none shadow-none">
           <CommandInput placeholder="Buscar usuario..." />
-          <CommandList>
+          <CommandList className="max-h-[300px]">
             {loading ? (
               <div className="flex items-center justify-center py-6">
                 <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
@@ -97,7 +102,7 @@ export function IncidentAssign({ open, onOpenChange, incidentId }: IncidentAssig
                       key={user.id}
                       value={user.name}
                       onSelect={() => setSelectedUser(user.id)}
-                      className="flex items-center gap-2"
+                      className="flex items-center gap-2 cursor-pointer"
                     >
                       <Avatar className="h-8 w-8">
                         <AvatarFallback className="text-xs">
@@ -124,17 +129,19 @@ export function IncidentAssign({ open, onOpenChange, incidentId }: IncidentAssig
             )}
           </CommandList>
         </Command>
-        <div className="p-2 border-t">
+        <div className="p-4 border-t bg-muted/50 flex justify-end gap-2">
+          <Button variant="outline" size="sm" onClick={() => onOpenChange(false)}>
+            Cancelar
+          </Button>
           <Button
-            className="w-full"
             size="sm"
             disabled={!selectedUser || isSubmitting}
             onClick={handleAssign}
           >
-            {isSubmitting ? 'Asignando...' : 'Confirmar asignación'}
+            {isSubmitting ? 'Asignando...' : 'Confirmar'}
           </Button>
         </div>
-      </PopoverContent>
-    </Popover>
+      </DialogContent>
+    </Dialog>
   );
 }
