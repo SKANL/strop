@@ -11,16 +11,24 @@ class SupabaseProfileRepository implements ProfileRepository {
   SupabaseProfileRepository(this._supabase);
 
   // Simple retry helper for transient errors
-  Future<T> _retry<T>(Future<T> Function() fn, {int attempts = 3}) async {
+  Future<T> _retry<T>(
+    Future<T> Function() fn, {
+    int attempts = 3,
+    bool isWrite = false,
+  }) async {
+    // For writes, fail fast (1 attempt, short delay)
+    final maxAttempts = isWrite ? 1 : attempts;
+    final baseDelayMs = isWrite ? 100 : 300;
+
     var attempt = 0;
     while (true) {
       attempt++;
       try {
         return await fn();
       } catch (e) {
-        final isLast = attempt >= attempts;
+        final isLast = attempt >= maxAttempts;
         if (!_isTransientError(e) || isLast) rethrow;
-        final delayMs = 300 * (1 << (attempt - 1));
+        final delayMs = baseDelayMs * (1 << (attempt - 1));
         logger.w(
           'Transient error, retrying in ${delayMs}ms (attempt $attempt) - $e',
         );
@@ -42,7 +50,9 @@ class SupabaseProfileRepository implements ProfileRepository {
 
   @override
   Future<domain.User?> getMyProfile(String userId) async {
+    final startTime = DateTime.now();
     try {
+      logger.d('[PROFILE] getMyProfile started for userId=$userId');
       // Try to find user by auth_id (auth user id) or by users.id
       final response = await _retry(() async {
         return await _supabase
@@ -54,9 +64,18 @@ class SupabaseProfileRepository implements ProfileRepository {
             .maybeSingle();
       });
 
-      if (response == null) return null;
+      if (response == null) {
+        logger.d(
+          '[PROFILE] getMyProfile completed in ${DateTime.now().difference(startTime).inMilliseconds}ms (no user found)',
+        );
+        return null;
+      }
 
-      return UserModel.fromJson(response as Map<String, dynamic>);
+      final user = UserModel.fromJson(response);
+      logger.d(
+        '[PROFILE] getMyProfile completed in ${DateTime.now().difference(startTime).inMilliseconds}ms',
+      );
+      return user;
     } on PostgrestException catch (e) {
       logger.e('DB error getting profile: ${e.message}');
       final msg = e.message.toString();
@@ -78,8 +97,10 @@ class SupabaseProfileRepository implements ProfileRepository {
   }
 
   @override
-  Future<void> updateProfile(domain.User profile) async {
+  Future<domain.User> updateProfile(domain.User profile) async {
+    final startTime = DateTime.now();
     try {
+      logger.d('[PROFILE] updateProfile started for user id=${profile.id}');
       final updateData = {
         'full_name': profile.fullName,
         'profile_picture_url': profile.profilePictureUrl,
@@ -87,70 +108,67 @@ class SupabaseProfileRepository implements ProfileRepository {
         'current_organization_id': profile.currentOrganizationId,
       };
 
-      // Update by internal id first
-      await _retry(() async {
-        return await _supabase
-            .from('users')
-            .update(updateData)
-            .eq('id', profile.id);
-      });
-
-      // Verify the update affected a row; if not, try updating by auth_id as a fallback
-      final verifyById = await _supabase
-          .from('users')
-          .select('id')
-          .eq('id', profile.id)
-          .maybeSingle();
-
-      if (verifyById == null) {
-        final authTarget = profile.authId ?? profile.id;
-        logger.w(
-          'Update by id affected 0 rows; retrying update by auth_id=$authTarget',
-        );
-        await _retry(() async {
+      // Update and return the updated row in one call (eliminates extra SELECT)
+      final response = await _retry(
+        () async {
           return await _supabase
               .from('users')
               .update(updateData)
-              .eq('auth_id', authTarget);
-        });
+              .eq('id', profile.id)
+              .select(
+                'id, email, full_name, auth_id, current_organization_id, profile_picture_url, is_active, theme_mode, created_at, updated_at',
+              )
+              .maybeSingle();
+        },
+        isWrite: true,
+      );
 
-        final verifyByAuth = await _supabase
-            .from('users')
-            .select('id')
-            .eq('auth_id', authTarget)
-            .maybeSingle();
-        if (verifyByAuth == null) {
-          logger.e('Profile update failed: no rows matched by id or auth_id');
+      // If no row returned, try by auth_id as fallback
+      if (response == null) {
+        final authTarget = profile.authId ?? profile.id;
+        logger.w(
+          '[PROFILE] Update by id affected 0 rows; retrying by auth_id=$authTarget',
+        );
+        final fallbackResponse = await _retry(
+          () async {
+            return await _supabase
+                .from('users')
+                .update(updateData)
+                .eq('auth_id', authTarget)
+                .select(
+                  'id, email, full_name, auth_id, current_organization_id, profile_picture_url, is_active, theme_mode, created_at, updated_at',
+                )
+                .maybeSingle();
+          },
+          isWrite: true,
+        );
+
+        if (fallbackResponse == null) {
+          logger.e(
+            '[PROFILE] Profile update failed: no rows matched by id or auth_id',
+          );
           throw Exception(
             'No se pudo actualizar el perfil. Intenta nuevamente.',
           );
         }
+        final updatedUser = UserModel.fromJson(fallbackResponse);
+        logger.d(
+          '[PROFILE] updateProfile completed in ${DateTime.now().difference(startTime).inMilliseconds}ms (via auth_id)',
+        );
+
+        // Sync auth metadata
+        await _syncAuthMetadata(updatedUser);
+        return updatedUser;
       }
 
-      // Attempt to keep Supabase Auth user metadata in sync only when the
-      // current session corresponds to the updated user.
-      final currentAuthId = _supabase.auth.currentUser?.id;
-      final authTargetId = profile.authId ?? profile.id;
-      if (currentAuthId != null && currentAuthId == authTargetId) {
-        try {
-          await _supabase.auth.updateUser(
-            UserAttributes(
-              data: {
-                'full_name': profile.fullName,
-                'avatar_url': profile.profilePictureUrl,
-              },
-            ),
-          );
-        } on AuthException catch (e) {
-          logger.w('Auth metadata sync failed', error: e);
-        } catch (e) {
-          logger.w('Auth metadata sync unexpected error', error: e);
-        }
-      } else {
-        logger.i(
-          'Skipping auth metadata sync: session user differs from profile',
-        );
-      }
+      final updatedUser = UserModel.fromJson(response);
+      logger.d(
+        '[PROFILE] updateProfile completed in ${DateTime.now().difference(startTime).inMilliseconds}ms',
+      );
+
+      // Sync auth metadata
+      await _syncAuthMetadata(updatedUser);
+      return updatedUser;
     } on PostgrestException catch (e) {
       logger.e('DB error updating profile: ${e.message}');
       final msg = e.message.toString();
@@ -177,6 +195,39 @@ class SupabaseProfileRepository implements ProfileRepository {
     }
   }
 
+  /// Sync Auth metadata (non-blocking, extracted for reuse)
+  Future<void> _syncAuthMetadata(domain.User user) async {
+    final currentAuthId = _supabase.auth.currentUser?.id;
+    if (currentAuthId != null &&
+        (user.authId == currentAuthId || user.id == currentAuthId)) {
+      try {
+        await _supabase.auth.updateUser(
+          UserAttributes(
+            data: {
+              'full_name': user.fullName,
+              'avatar_url': user.profilePictureUrl,
+            },
+          ),
+        );
+        logger.d('[PROFILE] Auth metadata synced successfully');
+      } on AuthException catch (e) {
+        logger.w(
+          '[PROFILE] Auth metadata sync failed (non-critical)',
+          error: e,
+        );
+      } catch (e) {
+        logger.w(
+          '[PROFILE] Auth metadata sync unexpected error (non-critical)',
+          error: e,
+        );
+      }
+    } else {
+      logger.i(
+        '[PROFILE] Skipping auth metadata sync: session user differs from profile',
+      );
+    }
+  }
+
   @override
   Future<void> changePassword(String newPassword) async {
     try {
@@ -191,9 +242,7 @@ class SupabaseProfileRepository implements ProfileRepository {
     } on AuthException catch (e) {
       logger.e('Auth error changing password', error: e);
       // Map common messages to friendly UX strings
-      final msg =
-          e.message?.toString() ??
-          'Error de autenticación al cambiar contraseña.';
+      final msg = e.message.toString();
       if (msg.contains('JWT')) {
         throw Exception(
           'Sesión expiró. Vuelve a iniciar sesión e intenta de nuevo.',
