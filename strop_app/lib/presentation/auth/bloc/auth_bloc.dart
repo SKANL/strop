@@ -1,13 +1,10 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:strop_app/domain/repositories/auth_repository.dart';
-import 'auth_event.dart';
-import 'auth_state.dart';
-
 import 'package:logger/logger.dart';
+import 'package:strop_app/domain/repositories/auth_repository.dart';
+import 'package:strop_app/presentation/auth/bloc/auth_event.dart';
+import 'package:strop_app/presentation/auth/bloc/auth_state.dart';
 
 class AuthBloc extends Bloc<AuthEvent, AuthState> {
-  final AuthRepository authRepository;
-  final Logger _logger = Logger();
 
   AuthBloc({required this.authRepository}) : super(AuthState.initial()) {
     on<AuthLoginRequested>(_onLoginRequested);
@@ -15,6 +12,8 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     on<AuthLogoutRequested>(_onLogoutRequested);
     on<AuthCheckRequested>(_onCheckRequested);
   }
+  final AuthRepository authRepository;
+  final Logger _logger = Logger();
 
   Future<void> _onCheckRequested(
     AuthCheckRequested event,

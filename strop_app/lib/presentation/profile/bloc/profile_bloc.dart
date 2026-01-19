@@ -1,63 +1,87 @@
-import 'package:bloc/bloc.dart';
-import 'package:logger/logger.dart';
+import 'package:equatable/equatable.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:strop_app/domain/entities/entities.dart';
+import 'package:strop_app/domain/repositories/auth_repository.dart';
 import 'package:strop_app/domain/repositories/profile_repository.dart';
-import 'profile_event.dart';
-import 'profile_state.dart';
+
+part 'profile_event.dart';
+part 'profile_state.dart';
 
 class ProfileBloc extends Bloc<ProfileEvent, ProfileState> {
-  final ProfileRepository profileRepository;
-  final Logger _logger = Logger();
 
-  ProfileBloc({required this.profileRepository}) : super(ProfileInitial()) {
-    on<ProfileLoadRequested>(_onLoad);
-    on<ProfileUpdateRequested>(_onUpdate);
-    on<ProfileChangePasswordRequested>(_onChangePassword);
-    on<ProfileReset>((event, emit) => emit(ProfileInitial()));
+  ProfileBloc({
+    required ProfileRepository profileRepository,
+    required AuthRepository authRepository,
+  }) : _profileRepository = profileRepository,
+       _authRepository = authRepository,
+       super(const ProfileState()) {
+    on<LoadProfile>(_onLoadProfile);
+    on<RefreshProfile>(_onRefreshProfile);
+    // on<UpdateProfile>(_onUpdateProfile);
+    on<LogoutRequested>(_onLogoutRequested);
   }
+  final ProfileRepository _profileRepository;
+  final AuthRepository _authRepository;
 
-  Future<void> _onLoad(
-    ProfileLoadRequested event,
+  Future<void> _onLoadProfile(
+    LoadProfile event,
     Emitter<ProfileState> emit,
   ) async {
-    emit(ProfileLoading());
+    emit(state.copyWith(status: ProfileStatus.loading));
     try {
-      final user = await profileRepository.getMyProfile(event.userId);
-      if (user == null) {
-        emit(ProfileFailure('Perfil no encontrado'));
+      // But repo method signature is specific.
+
+      // Get the current authenticated user from AuthRepository
+      final currentUser = await _authRepository.getCurrentUser();
+
+      if (currentUser == null) {
+        emit(
+          state.copyWith(
+            status: ProfileStatus.error,
+            errorMessage: 'No hay sesión activa. Por favor inicia sesión.',
+          ),
+        );
+        return;
+      }
+
+      final userId = currentUser.id;
+      final user = await _profileRepository.getMyProfile(userId);
+
+      if (user != null) {
+        emit(state.copyWith(status: ProfileStatus.loaded, user: user));
       } else {
-        emit(ProfileLoaded(user));
+        emit(
+          state.copyWith(
+            status: ProfileStatus.error,
+            errorMessage: 'Usuario no encontrado',
+          ),
+        );
       }
     } catch (e) {
-      _logger.e('Error loading profile', error: e);
-      emit(ProfileFailure(e.toString()));
+      emit(
+        state.copyWith(status: ProfileStatus.error, errorMessage: e.toString()),
+      );
     }
   }
 
-  Future<void> _onUpdate(
-    ProfileUpdateRequested event,
+  Future<void> _onRefreshProfile(
+    RefreshProfile event,
     Emitter<ProfileState> emit,
   ) async {
-    emit(ProfileLoading());
-    try {
-      // updateProfile now returns the updated user directly (no extra SELECT needed)
-      final updatedUser = await profileRepository.updateProfile(event.user);
-      emit(ProfileLoaded(updatedUser));
-    } catch (e) {
-      _logger.e('Error updating profile', error: e);
-      emit(ProfileFailure(e.toString()));
-    }
+    // Similar to Load but keep content while loading?
+    add(LoadProfile());
   }
 
-  Future<void> _onChangePassword(
-    ProfileChangePasswordRequested event,
+  Future<void> _onLogoutRequested(
+    LogoutRequested event,
     Emitter<ProfileState> emit,
   ) async {
     try {
-      await profileRepository.changePassword(event.newPassword);
-      emit(ProfilePasswordChangeSuccess());
+      await _authRepository.logout();
+      // Emitting loggedOut status to trigger navigation
+      emit(state.copyWith(status: ProfileStatus.loggedOut));
     } catch (e) {
-      _logger.e('Error changing password', error: e);
-      emit(ProfileFailure(e.toString()));
+      emit(state.copyWith(errorMessage: 'Error al cerrar sesión: $e'));
     }
   }
 }

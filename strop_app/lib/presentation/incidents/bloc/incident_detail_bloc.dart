@@ -1,5 +1,5 @@
-import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:equatable/equatable.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:strop_app/domain/entities/entities.dart';
 import 'package:strop_app/domain/repositories/incident_repository.dart';
 
@@ -11,31 +11,31 @@ abstract class IncidentDetailEvent extends Equatable {
 }
 
 class LoadIncidentDetail extends IncidentDetailEvent {
-  final String incidentId;
   const LoadIncidentDetail(this.incidentId);
+  final String incidentId;
   @override
   List<Object?> get props => [incidentId];
 }
 
 class AddComment extends IncidentDetailEvent {
+  const AddComment(this.incidentId, this.text);
   final String incidentId;
   final String text;
-  const AddComment(this.incidentId, this.text);
   @override
   List<Object?> get props => [incidentId, text];
 }
 
 class LoadComments extends IncidentDetailEvent {
-  final String incidentId;
   const LoadComments(this.incidentId);
+  final String incidentId;
   @override
   List<Object?> get props => [incidentId];
 }
 
 class CloseIncident extends IncidentDetailEvent {
+  const CloseIncident(this.incidentId, this.closedNotes);
   final String incidentId;
   final String? closedNotes;
-  const CloseIncident(this.incidentId, this.closedNotes);
   @override
   List<Object?> get props => [incidentId, closedNotes];
 }
@@ -53,12 +53,7 @@ class IncidentDetailInitial extends IncidentDetailState {}
 
 class IncidentDetailLoading extends IncidentDetailState {}
 
-class IncidentDetailLoaded extends IncidentDetailState {
-  final Incident incident;
-  final List<Comment> comments;
-  final bool isCommentLoading;
-  final bool isClosing;
-  final String? actionError; // For transient errors (e.g. failed to comment)
+class IncidentDetailLoaded extends IncidentDetailState { // For transient errors (e.g. failed to comment)
 
   const IncidentDetailLoaded({
     required this.incident,
@@ -67,6 +62,11 @@ class IncidentDetailLoaded extends IncidentDetailState {
     this.isClosing = false,
     this.actionError,
   });
+  final Incident incident;
+  final List<Comment> comments;
+  final bool isCommentLoading;
+  final bool isClosing;
+  final String? actionError;
 
   IncidentDetailLoaded copyWith({
     Incident? incident,
@@ -124,8 +124,8 @@ class IncidentDetailLoaded extends IncidentDetailState {
 }
 
 class IncidentDetailError extends IncidentDetailState {
-  final String message;
   const IncidentDetailError(this.message);
+  final String message;
   @override
   List<Object?> get props => [message];
 }
@@ -133,7 +133,6 @@ class IncidentDetailError extends IncidentDetailState {
 // Bloc
 class IncidentDetailBloc
     extends Bloc<IncidentDetailEvent, IncidentDetailState> {
-  final IncidentRepository _repository;
 
   IncidentDetailBloc({required IncidentRepository repository})
     : _repository = repository,
@@ -144,6 +143,7 @@ class IncidentDetailBloc
     on<CloseIncident>(_onCloseIncident);
     on<ClearActionError>(_onClearActionError);
   }
+  final IncidentRepository _repository;
 
   Future<void> _onLoadDetail(
     LoadIncidentDetail event,

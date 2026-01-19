@@ -68,7 +68,7 @@ class ProjectsListPage extends StatelessWidget {
                     child: Image.network(
                       'https://picsum.photos/seed/${project.id}/800/400',
                       fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => Container(
+                      errorBuilder: (_, __, ___) => ColoredBox(
                         color: AppColors.primary.withValues(alpha: 0.1),
                         child: const Icon(
                           Icons.apartment,

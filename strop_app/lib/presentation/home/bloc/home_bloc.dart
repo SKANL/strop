@@ -1,5 +1,5 @@
-import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:equatable/equatable.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:strop_app/domain/entities/entities.dart';
 import 'package:strop_app/domain/repositories/incident_repository.dart';
 // removed unused imports
@@ -27,29 +27,28 @@ class HomeInitial extends HomeState {}
 class HomeLoading extends HomeState {}
 
 class HomeLoaded extends HomeState {
-  final Map<String, int> summaryStats;
-  final List<Incident> recentActivity;
   // User is usually accessed via AuthBloc, or we can include it here if Home manages Profile specifics
 
   const HomeLoaded({
     required this.summaryStats,
     required this.recentActivity,
   });
+  final Map<String, int> summaryStats;
+  final List<Incident> recentActivity;
 
   @override
   List<Object?> get props => [summaryStats, recentActivity];
 }
 
 class HomeError extends HomeState {
-  final String message;
   const HomeError(this.message);
+  final String message;
   @override
   List<Object?> get props => [message];
 }
 
 // Bloc
 class HomeBloc extends Bloc<HomeEvent, HomeState> {
-  final IncidentRepository _incidentRepository;
 
   HomeBloc({
     required IncidentRepository incidentRepository,
@@ -58,6 +57,7 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
     on<HomeStarted>(_onStarted);
     on<HomeRefreshed>(_onRefreshed);
   }
+  final IncidentRepository _incidentRepository;
 
   Future<void> _onStarted(HomeStarted event, Emitter<HomeState> emit) async {
     await _loadData(emit);

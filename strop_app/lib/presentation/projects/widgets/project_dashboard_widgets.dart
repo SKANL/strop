@@ -3,20 +3,15 @@ import 'package:strop_app/core/theme/app_colors.dart';
 
 /// Header del Proyecto: Muestra progreso general y estado
 class ProjectHeader extends StatelessWidget {
+
+  const ProjectHeader({
+    required this.projectName, required this.location, required this.progress, required this.status, required this.deliveryDate, super.key,
+  });
   final String projectName;
   final String location;
   final double progress;
   final String status;
   final String deliveryDate;
-
-  const ProjectHeader({
-    super.key,
-    required this.projectName,
-    required this.location,
-    required this.progress,
-    required this.status,
-    required this.deliveryDate,
-  });
 
   @override
   Widget build(BuildContext context) {
@@ -159,14 +154,12 @@ class ProjectHeader extends StatelessWidget {
 
 /// Tarjetas de Acceso Rápido (KPIs)
 class QuickAccessCards extends StatelessWidget {
-  final VoidCallback onProgramTap;
-  final VoidCallback onMaterialsTap;
 
   const QuickAccessCards({
-    super.key,
-    required this.onProgramTap,
-    required this.onMaterialsTap,
+    required this.onProgramTap, required this.onMaterialsTap, super.key,
   });
+  final VoidCallback onProgramTap;
+  final VoidCallback onMaterialsTap;
 
   @override
   Widget build(BuildContext context) {
@@ -197,11 +190,6 @@ class QuickAccessCards extends StatelessWidget {
 }
 
 class _QuickCard extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  final String subtitle;
-  final Color color;
-  final VoidCallback onTap;
 
   const _QuickCard({
     required this.icon,
@@ -210,6 +198,11 @@ class _QuickCard extends StatelessWidget {
     required this.color,
     required this.onTap,
   });
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final Color color;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -251,7 +244,7 @@ class _QuickCard extends StatelessWidget {
             const SizedBox(height: 4),
             Text(
               subtitle,
-              style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
+              style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
             ),
           ],
         ),
@@ -262,9 +255,9 @@ class _QuickCard extends StatelessWidget {
 
 /// Preview de Bitácora (Última actividad)
 class BitacoraPreview extends StatelessWidget {
-  final VoidCallback onViewAll;
 
-  const BitacoraPreview({super.key, required this.onViewAll});
+  const BitacoraPreview({required this.onViewAll, super.key});
+  final VoidCallback onViewAll;
 
   @override
   Widget build(BuildContext context) {
@@ -341,7 +334,7 @@ class BitacoraPreview extends StatelessWidget {
                 ),
                 Text(
                   description,
-                  style: TextStyle(
+                  style: const TextStyle(
                     color: AppColors.textSecondary,
                     fontSize: 12,
                   ),
@@ -353,7 +346,7 @@ class BitacoraPreview extends StatelessWidget {
           ),
           Text(
             time,
-            style: TextStyle(color: AppColors.textSecondary, fontSize: 11),
+            style: const TextStyle(color: AppColors.textSecondary, fontSize: 11),
           ),
         ],
       ),

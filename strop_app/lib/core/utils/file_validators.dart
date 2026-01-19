@@ -23,7 +23,7 @@ class FileValidators {
         return 'La imagen supera el tamaño máximo de ${maxImageBytes ~/ (1024 * 1024)} MB';
       }
 
-      final name = file.path.split('/').last.split('\\').last;
+      final name = file.path.split('/').last.split(r'\').last;
       final parts = name.split('.');
       if (parts.length < 2) return 'Tipo de archivo no reconocido';
       final ext = parts.last.toLowerCase();

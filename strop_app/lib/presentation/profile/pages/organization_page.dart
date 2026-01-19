@@ -101,7 +101,7 @@ class OrganizationPage extends StatelessWidget {
                 icon: Icons.cloud_outlined,
                 title: 'Almacenamiento',
                 used: 2.5,
-                total: 5.0,
+                total: 5,
                 unit: 'GB',
                 color: AppColors.primary,
               ),

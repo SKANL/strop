@@ -63,7 +63,7 @@ class _RegisterPageState extends State<RegisterPage> {
           child: SafeArea(
             child: Center(
               child: SingleChildScrollView(
-                padding: const EdgeInsets.all(24.0),
+                padding: const EdgeInsets.all(24),
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
@@ -130,7 +130,7 @@ class _RegisterPageState extends State<RegisterPage> {
                               ),
                               textInputAction: TextInputAction.next,
                               validator: (v) =>
-                                  v?.isEmpty == true ? 'Requerido' : null,
+                                  v?.isEmpty ?? false ? 'Requerido' : null,
                             ),
                             const SizedBox(height: 20),
 
@@ -274,9 +274,9 @@ class _RegisterPageState extends State<RegisterPage> {
                     TextButton(
                       onPressed: () => context.pop(),
                       child: RichText(
-                        text: TextSpan(
+                        text: const TextSpan(
                           text: '¿Ya tienes cuenta? ',
-                          style: const TextStyle(color: Colors.white70),
+                          style: TextStyle(color: Colors.white70),
                           children: [
                             TextSpan(
                               text: 'Inicia Sesión',

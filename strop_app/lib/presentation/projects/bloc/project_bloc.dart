@@ -1,5 +1,5 @@
-import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:equatable/equatable.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:strop_app/domain/entities/entities.dart';
 import 'package:strop_app/domain/repositories/project_repository.dart';
 
@@ -13,8 +13,8 @@ abstract class ProjectEvent extends Equatable {
 class ProjectStarted extends ProjectEvent {}
 
 class ProjectSelected extends ProjectEvent {
-  final Project project;
   const ProjectSelected(this.project);
+  final Project project;
   @override
   List<Object?> get props => [project];
 }
@@ -31,13 +31,13 @@ class ProjectInitial extends ProjectState {}
 class ProjectLoading extends ProjectState {}
 
 class ProjectLoaded extends ProjectState {
-  final List<Project> projects;
-  final Project? selectedProject;
 
   const ProjectLoaded({
     required this.projects,
     this.selectedProject,
   });
+  final List<Project> projects;
+  final Project? selectedProject;
 
   ProjectLoaded copyWith({
     List<Project>? projects,
@@ -54,15 +54,14 @@ class ProjectLoaded extends ProjectState {
 }
 
 class ProjectError extends ProjectState {
-  final String message;
   const ProjectError(this.message);
+  final String message;
   @override
   List<Object?> get props => [message];
 }
 
 // Bloc
 class ProjectBloc extends Bloc<ProjectEvent, ProjectState> {
-  final ProjectRepository _projectRepository;
 
   ProjectBloc({required ProjectRepository projectRepository})
     : _projectRepository = projectRepository,
@@ -70,6 +69,7 @@ class ProjectBloc extends Bloc<ProjectEvent, ProjectState> {
     on<ProjectStarted>(_onStarted);
     on<ProjectSelected>(_onSelected);
   }
+  final ProjectRepository _projectRepository;
 
   Future<void> _onStarted(
     ProjectStarted event,

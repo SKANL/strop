@@ -1,14 +1,14 @@
 import 'package:strop_app/core/utils/logger.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:strop_app/data/models/user_model.dart';
 import 'package:strop_app/domain/entities/user.dart' as domain;
 import 'package:strop_app/domain/repositories/profile_repository.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class SupabaseProfileRepository implements ProfileRepository {
-  final SupabaseClient _supabase;
   // Use global logger instance from core/utils/logger.dart
 
   SupabaseProfileRepository(this._supabase);
+  final SupabaseClient _supabase;
 
   // Simple retry helper for transient errors
   Future<T> _retry<T>(
@@ -39,12 +39,14 @@ class SupabaseProfileRepository implements ProfileRepository {
 
   bool _isTransientError(Object e) {
     final msg = e.toString().toLowerCase();
-    if (e is PostgrestException)
+    if (e is PostgrestException) {
       return false; // DB errors usually not transient
+    }
     if (msg.contains('socketexception') ||
         msg.contains('failed host lookup') ||
-        msg.contains('timeout'))
+        msg.contains('timeout')) {
       return true;
+    }
     return false;
   }
 
@@ -78,7 +80,7 @@ class SupabaseProfileRepository implements ProfileRepository {
       return user;
     } on PostgrestException catch (e) {
       logger.e('DB error getting profile: ${e.message}');
-      final msg = e.message.toString();
+      final msg = e.message;
       if (msg.toLowerCase().contains('permission') ||
           msg.toLowerCase().contains('policy')) {
         throw Exception('Permisos insuficientes para leer el perfil.');
@@ -171,7 +173,7 @@ class SupabaseProfileRepository implements ProfileRepository {
       return updatedUser;
     } on PostgrestException catch (e) {
       logger.e('DB error updating profile: ${e.message}');
-      final msg = e.message.toString();
+      final msg = e.message;
       if (msg.toLowerCase().contains('duplicate') ||
           msg.toLowerCase().contains('unique')) {
         throw Exception(
@@ -242,7 +244,7 @@ class SupabaseProfileRepository implements ProfileRepository {
     } on AuthException catch (e) {
       logger.e('Auth error changing password', error: e);
       // Map common messages to friendly UX strings
-      final msg = e.message.toString();
+      final msg = e.message;
       if (msg.contains('JWT')) {
         throw Exception(
           'Sesión expiró. Vuelve a iniciar sesión e intenta de nuevo.',

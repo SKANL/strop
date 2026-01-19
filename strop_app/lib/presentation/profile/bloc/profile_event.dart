@@ -1,33 +1,23 @@
-import 'package:equatable/equatable.dart';
-import 'package:strop_app/domain/entities/user.dart';
+part of 'profile_bloc.dart';
 
 abstract class ProfileEvent extends Equatable {
+  const ProfileEvent();
+
   @override
   List<Object?> get props => [];
 }
 
-class ProfileLoadRequested extends ProfileEvent {
-  final String userId;
-  ProfileLoadRequested(this.userId);
+class LoadProfile extends ProfileEvent {}
 
-  @override
-  List<Object?> get props => [userId];
-}
+class RefreshProfile extends ProfileEvent {}
 
-class ProfileUpdateRequested extends ProfileEvent {
+class UpdateProfile extends ProfileEvent {
+
+  const UpdateProfile(this.user);
   final User user;
-  ProfileUpdateRequested(this.user);
 
   @override
   List<Object?> get props => [user];
 }
 
-class ProfileChangePasswordRequested extends ProfileEvent {
-  final String newPassword;
-  ProfileChangePasswordRequested(this.newPassword);
-
-  @override
-  List<Object?> get props => [newPassword];
-}
-
-class ProfileReset extends ProfileEvent {}
+class LogoutRequested extends ProfileEvent {}

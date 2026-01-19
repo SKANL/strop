@@ -102,7 +102,7 @@ class ProjectSelectorBottomSheet extends StatelessWidget {
         if (state is ProjectError) {
           return Center(
             child: Padding(
-              padding: const EdgeInsets.all(16.0),
+              padding: const EdgeInsets.all(16),
               child: Text(
                 'Error: ${state.message}',
                 style: const TextStyle(color: Colors.red),

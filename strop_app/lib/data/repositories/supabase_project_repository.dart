@@ -1,8 +1,8 @@
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:strop_app/core/utils/logger.dart';
 import 'package:strop_app/data/models/project_model.dart';
 import 'package:strop_app/domain/entities/entities.dart';
 import 'package:strop_app/domain/repositories/project_repository.dart';
-import 'package:strop_app/core/utils/logger.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 /// Supabase implementation of ProjectRepository
 class SupabaseProjectRepository implements ProjectRepository {

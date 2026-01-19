@@ -1,5 +1,5 @@
-import 'package:strop_app/domain/entities/user.dart';
 import 'package:strop_app/domain/entities/enums.dart';
+import 'package:strop_app/domain/entities/user.dart';
 import 'package:strop_app/domain/repositories/auth_repository.dart';
 
 class MockAuthRepository implements AuthRepository {
@@ -22,8 +22,6 @@ class MockAuthRepository implements AuthRepository {
       fullName: 'Usuario Demo',
       role: UserRole.owner,
       currentOrganizationId: 'org-123',
-      isActive: true,
-      themeMode: 'light',
       createdAt: DateTime.now(),
       updatedAt: DateTime.now(),
     );

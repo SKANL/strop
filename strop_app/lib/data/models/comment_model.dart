@@ -22,7 +22,6 @@ class CommentModel extends Comment {
         email: '',
         fullName: authorName,
         profilePictureUrl: authorAvatar,
-        isActive: true,
         authId: '',
       );
     } else if (json['author'] is Map<String, dynamic>) {

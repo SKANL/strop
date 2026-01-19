@@ -1,7 +1,7 @@
-import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:equatable/equatable.dart';
-import 'package:strop_app/domain/repositories/incident_repository.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:strop_app/core/utils/logger.dart';
+import 'package:strop_app/domain/repositories/incident_repository.dart';
 
 // Events
 abstract class CreateIncidentEvent extends Equatable {
@@ -11,13 +11,6 @@ abstract class CreateIncidentEvent extends Equatable {
 }
 
 class CreateIncidentSubmitted extends CreateIncidentEvent {
-  final String projectId;
-  final String title;
-  final String description;
-  final String incidentType;
-  final String priority;
-  final String? location;
-  final List<String> photoPaths;
 
   const CreateIncidentSubmitted({
     required this.projectId,
@@ -28,6 +21,13 @@ class CreateIncidentSubmitted extends CreateIncidentEvent {
     this.location,
     this.photoPaths = const [],
   });
+  final String projectId;
+  final String title;
+  final String description;
+  final String incidentType;
+  final String priority;
+  final String? location;
+  final List<String> photoPaths;
 
   @override
   List<Object?> get props => [
@@ -53,18 +53,18 @@ class CreateIncidentInitial extends CreateIncidentState {}
 class CreateIncidentLoading extends CreateIncidentState {}
 
 class CreateIncidentSuccess extends CreateIncidentState {
-  final String incidentId;
-  final String? warningMessage;
 
   const CreateIncidentSuccess({required this.incidentId, this.warningMessage});
+  final String incidentId;
+  final String? warningMessage;
 
   @override
   List<Object?> get props => [incidentId, warningMessage];
 }
 
 class CreateIncidentFailure extends CreateIncidentState {
-  final String message;
   const CreateIncidentFailure(this.message);
+  final String message;
   @override
   List<Object?> get props => [message];
 }
@@ -72,7 +72,6 @@ class CreateIncidentFailure extends CreateIncidentState {
 // Bloc
 class CreateIncidentBloc
     extends Bloc<CreateIncidentEvent, CreateIncidentState> {
-  final IncidentRepository _incidentRepository;
 
   CreateIncidentBloc({
     required IncidentRepository incidentRepository,
@@ -80,6 +79,7 @@ class CreateIncidentBloc
        super(CreateIncidentInitial()) {
     on<CreateIncidentSubmitted>(_onSubmitted);
   }
+  final IncidentRepository _incidentRepository;
 
   Future<void> _onSubmitted(
     CreateIncidentSubmitted event,
@@ -98,7 +98,7 @@ class CreateIncidentBloc
       );
 
       // 2. Upload Photos (if any)
-      int failedPhotos = 0;
+      var failedPhotos = 0;
       if (event.photoPaths.isNotEmpty) {
         for (final path in event.photoPaths) {
           try {

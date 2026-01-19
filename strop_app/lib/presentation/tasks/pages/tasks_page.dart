@@ -248,11 +248,11 @@ class _TasksPageState extends State<TasksPage>
                       const SizedBox(width: 4),
                       ConstrainedBox(
                         constraints: const BoxConstraints(maxWidth: 120),
-                        child: Text(
+                        child: const Text(
                           // Mock project name lookup could go here, for now static or from incident if available
                           'Proyecto Demo',
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 12,
                             color: AppColors.textSecondary,
                           ),
@@ -329,19 +329,15 @@ class _TasksPageState extends State<TasksPage>
       case IncidentType.incidentNotification:
         color = Colors.orange;
         text = 'Incidencia';
-        break;
       case IncidentType.orderInstruction:
         color = Colors.blue;
         text = 'Orden';
-        break;
       case IncidentType.requestQuery:
         color = Colors.purple;
         text = 'Consulta';
-        break;
       case IncidentType.certification:
         color = Colors.green;
         text = 'Certificación';
-        break;
     }
 
     return Container(

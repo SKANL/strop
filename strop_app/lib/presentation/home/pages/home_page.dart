@@ -6,18 +6,14 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
-
 import 'package:strop_app/core/theme/app_colors.dart';
 import 'package:strop_app/core/theme/app_shadows.dart';
 import 'package:strop_app/domain/entities/entities.dart';
 import 'package:strop_app/presentation/auth/bloc/auth_bloc.dart';
 import 'package:strop_app/presentation/auth/bloc/auth_state.dart';
 import 'package:strop_app/presentation/home/bloc/home_bloc.dart';
-import 'package:strop_app/presentation/profile/bloc/profile_bloc.dart';
-import 'package:strop_app/presentation/profile/bloc/profile_event.dart';
-import 'package:strop_app/presentation/profile/bloc/profile_state.dart';
 import 'package:strop_app/presentation/home/widgets/sync_status_indicator.dart';
-import 'package:strop_app/presentation/shared/widgets/strop_action_button.dart';
+import 'package:strop_app/presentation/profile/bloc/profile_bloc.dart';
 import 'package:strop_app/presentation/shared/widgets/strop_dashboard_card.dart';
 
 /// Home page with smart feed dashboard
@@ -37,12 +33,12 @@ class _HomePageState extends State<HomePage> {
     final authBloc = context.read<AuthBloc>();
     final current = authBloc.state.user;
     if (current != null) {
-      context.read<ProfileBloc>().add(ProfileLoadRequested(current.id));
+      context.read<ProfileBloc>().add(LoadProfile());
     }
     _authSub = authBloc.stream.listen((state) {
-      final user = (state as AuthState).user;
+      final user = state.user;
       if (user != null) {
-        context.read<ProfileBloc>().add(ProfileLoadRequested(user.id));
+        context.read<ProfileBloc>().add(LoadProfile());
       }
     });
   }
@@ -74,8 +70,8 @@ class _HomePageState extends State<HomePage> {
 
                   return BlocBuilder<ProfileBloc, ProfileState>(
                     builder: (context, profileState) {
-                      if (profileState is ProfileLoaded) {
-                        return _buildHeader(context, profileState.user);
+                      if (profileState.user != null) {
+                        return _buildHeader(context, profileState.user!);
                       }
                       return _buildHeader(context, user);
                     },
@@ -92,9 +88,6 @@ class _HomePageState extends State<HomePage> {
                   return _buildSummarySection(context, summary);
                 },
               ),
-
-              // Quick access buttons
-              _buildQuickAccess(context),
 
               // Recent activity header
               _buildRecentActivityHeader(context),
@@ -195,6 +188,11 @@ class _HomePageState extends State<HomePage> {
 
           // Sync status indicator
           const SyncStatusIndicator(),
+          IconButton(
+            icon: const Icon(Icons.notifications_outlined),
+            onPressed: () => context.push('/settings/notifications'),
+            color: AppColors.textSecondary,
+          ),
         ],
       ),
     );
@@ -249,10 +247,6 @@ class _HomePageState extends State<HomePage> {
         ],
       ),
     );
-  }
-
-  Widget _buildQuickAccess(BuildContext context) {
-    return const SizedBox.shrink();
   }
 
   Widget _buildRecentActivityHeader(BuildContext context) {

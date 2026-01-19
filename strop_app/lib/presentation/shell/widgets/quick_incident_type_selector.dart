@@ -7,10 +7,10 @@
 // - Navigates to create incident page
 
 import 'dart:async';
-import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 
+import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:go_router/go_router.dart';
 import 'package:strop_app/core/theme/app_colors.dart';
 import 'package:strop_app/core/theme/app_shadows.dart';
 import 'package:strop_app/domain/entities/entities.dart';

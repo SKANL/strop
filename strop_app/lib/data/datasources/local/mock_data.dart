@@ -140,7 +140,6 @@ class MockDataService {
           'Se detectó una fisura diagonal de 3mm de espesor en el eje 4, muro de contención norte. Requiere evaluación inmediata del calculista.',
       location: 'Sótano 2, Eje 4',
       priority: IncidentPriority.critical,
-      status: IncidentStatus.open,
       createdById: 'user-002', // Superintendent
       createdBy: mockUsers[1],
       createdAt: DateTime.now().subtract(const Duration(hours: 4)),
@@ -177,8 +176,6 @@ class MockDataService {
       description:
           'Por instrucción de arquitectura, se debe cambiar el pegazulejo estándar por pegazulejo reforzado en todas las áreas húmedas.',
       location: 'Todos los niveles',
-      priority: IncidentPriority.normal,
-      status: IncidentStatus.open,
       createdById: 'user-004', // Owner
       createdBy: mockUsers[3],
       createdAt: DateTime.now().subtract(const Duration(days: 1)),
@@ -201,7 +198,6 @@ class MockDataService {
       assignedToId: 'user-002',
       assignedTo: mockUsers[1],
       createdAt: DateTime.now().subtract(const Duration(hours: 1)),
-      commentsCount: 0,
     ),
 
     // REQUETS / QUERIES
@@ -214,7 +210,6 @@ class MockDataService {
       description:
           'El plano A-05 indica NPT +3.50 pero en corte se ve +3.60. ¿Cuál es el correcto para desplante de muros?',
       location: 'Acceso Principal',
-      priority: IncidentPriority.normal,
       status: IncidentStatus.closed,
       createdById: 'user-003',
       createdBy: mockUsers[2],
@@ -235,7 +230,6 @@ class MockDataService {
       description:
           'Faltan 200m de cable cal. 12 para terminar circuitos de iluminación en ala oeste.',
       location: 'Ala Oeste, Nivel 4',
-      priority: IncidentPriority.normal,
       status: IncidentStatus.assigned,
       createdById: 'user-001', // Me
       createdBy: currentUser,
@@ -255,7 +249,6 @@ class MockDataService {
       description:
           'Solicito revisión y liberación de armado de acero en losa tapa de cisterna para proceder a colado.',
       location: 'Cisterna 1',
-      priority: IncidentPriority.normal,
       status: IncidentStatus.assigned,
       createdById: 'user-002',
       createdBy: mockUsers[1],
@@ -263,7 +256,6 @@ class MockDataService {
       assignedTo: currentUser,
       createdAt: DateTime.now().subtract(const Duration(minutes: 45)),
       photoUrls: const ['armado_cisterna.jpg'],
-      commentsCount: 0,
     ),
     Incident(
       id: 'inc-008',
@@ -274,7 +266,6 @@ class MockDataService {
       description:
           'Prueba de presión realizada a 4kg/cm2 durante 24h. Sin caídas de presión.',
       location: 'Departamentos 301-304',
-      priority: IncidentPriority.normal,
       status: IncidentStatus.closed,
       createdById: 'user-001', // Me
       createdBy: currentUser,
@@ -302,10 +293,9 @@ class MockDataService {
           'Se reporta falta de 2 taladros inalámbricos del almacén de contratista eléctrico.',
       location: 'Bodega 2',
       priority: IncidentPriority.critical,
-      status: IncidentStatus.open,
       createdById: 'user-005',
       createdBy: mockUsers[4],
-      createdAt: DateTime.now().subtract(const Duration(days: 0, hours: 1)),
+      createdAt: DateTime.now().subtract(const Duration(hours: 1)),
       commentsCount: 1,
     ),
     Incident(
@@ -317,7 +307,6 @@ class MockDataService {
       description:
           'La olla de concreto programada para las 8:00 AM no ha llegado. Retraso de 2 horas en colado.',
       location: 'Acceso Vehicular',
-      priority: IncidentPriority.normal,
       status: IncidentStatus.closed,
       createdById: 'user-001',
       createdBy: currentUser,
@@ -337,7 +326,6 @@ class MockDataService {
       description:
           'El tono muestra aplicado no coincide con el render. ¿Se autoriza cambio a pantone 432C?',
       location: 'Fachada Sur',
-      priority: IncidentPriority.normal,
       status: IncidentStatus.assigned,
       createdById: 'user-002',
       createdBy: mockUsers[1],
@@ -345,7 +333,6 @@ class MockDataService {
       assignedTo: mockUsers[3],
       createdAt: DateTime.now().subtract(const Duration(minutes: 10)),
       photoUrls: const ['muestra_pintura.jpg'],
-      commentsCount: 0,
     ),
   ];
 

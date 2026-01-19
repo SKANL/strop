@@ -2,16 +2,15 @@
 // lib/presentation/incidents/pages/create_incident_page.dart
 
 import 'dart:async';
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
-import 'dart:io';
-
-import 'package:strop_app/core/utils/file_validators.dart';
-
 import 'package:strop_app/core/theme/app_colors.dart';
 import 'package:strop_app/core/theme/app_shadows.dart';
+import 'package:strop_app/core/utils/file_validators.dart';
 import 'package:strop_app/domain/entities/entities.dart';
 import 'package:strop_app/domain/repositories/incident_repository.dart'; // Ensure this is exported or imported correctly
 import 'package:strop_app/presentation/incidents/bloc/create_incident_bloc.dart';
@@ -130,9 +129,9 @@ class _CreateIncidentPageState extends State<CreateIncidentPage> {
                   ],
                 ),
                 if (state is CreateIncidentLoading)
-                  Container(
+                  const ColoredBox(
                     color: Colors.black12,
-                    child: const Center(
+                    child: Center(
                       child: CircularProgressIndicator(),
                     ),
                   ),
@@ -317,7 +316,7 @@ class _CreateIncidentPageState extends State<CreateIncidentPage> {
       decoration: BoxDecoration(
         color: AppColors.backgroundLight,
         borderRadius: BorderRadius.circular(12),
-        image: DecorationImage(
+        image: const DecorationImage(
           image: NetworkImage(
             'https://picsum.photos/100',
           ), // Replace with FileImage(_photos[index]) logic
@@ -717,7 +716,7 @@ class _CreateIncidentPageState extends State<CreateIncidentPage> {
       return;
     }
 
-    final XFile? image = await _picker.pickImage(
+    final image = await _picker.pickImage(
       source: ImageSource.camera,
       imageQuality: 70, // Basic compression
       maxWidth: 1024,

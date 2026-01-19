@@ -54,6 +54,14 @@ class SyncStatusIndicator extends StatelessWidget {
               color: isOnline ? AppColors.success : AppColors.warning,
             ),
           ),
+          if (isOnline && pendingCount == 0) ...[
+            const SizedBox(width: 6),
+            const Icon(
+              Icons.cloud_done,
+              size: 14,
+              color: AppColors.success,
+            ),
+          ],
           // Pending count badge
           if (pendingCount > 0) ...[
             const SizedBox(width: 6),

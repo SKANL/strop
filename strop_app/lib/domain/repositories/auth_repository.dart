@@ -1,4 +1,4 @@
-import '../entities/user.dart';
+import 'package:strop_app/domain/entities/user.dart';
 
 abstract class AuthRepository {
   Future<User> login(String email, String password);

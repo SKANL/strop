@@ -1,16 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:strop_app/core/di/injection_container.dart';
-import 'package:strop_app/domain/repositories/auth_repository.dart';
-import 'package:strop_app/domain/repositories/project_repository.dart';
-import 'package:strop_app/domain/repositories/incident_repository.dart';
 import 'package:strop_app/core/router/app_router.dart';
 import 'package:strop_app/core/theme/app_theme.dart';
+import 'package:strop_app/domain/repositories/auth_repository.dart';
+import 'package:strop_app/domain/repositories/incident_repository.dart';
+import 'package:strop_app/domain/repositories/project_repository.dart';
 import 'package:strop_app/presentation/auth/bloc/auth_bloc.dart';
 import 'package:strop_app/presentation/auth/bloc/auth_event.dart';
-import 'package:strop_app/presentation/projects/bloc/project_bloc.dart';
-import 'package:strop_app/presentation/profile/bloc/profile_bloc.dart';
 import 'package:strop_app/presentation/home/bloc/home_bloc.dart';
+import 'package:strop_app/presentation/profile/bloc/profile_bloc.dart';
+import 'package:strop_app/presentation/projects/bloc/project_bloc.dart';
 
 class App extends StatelessWidget {
   const App({super.key});

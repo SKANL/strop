@@ -1,13 +1,13 @@
 import 'package:logger/logger.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:strop_app/domain/entities/user.dart' as domain;
 import 'package:strop_app/domain/repositories/auth_repository.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class SupabaseAuthRepository implements AuthRepository {
-  final SupabaseClient _supabase;
-  final Logger _logger = Logger();
 
   SupabaseAuthRepository(this._supabase);
+  final SupabaseClient _supabase;
+  final Logger _logger = Logger();
 
   @override
   Future<domain.User> login(String email, String password) async {

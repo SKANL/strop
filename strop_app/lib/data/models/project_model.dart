@@ -1,5 +1,4 @@
 import 'package:strop_app/domain/entities/entities.dart';
-import 'package:strop_app/domain/entities/enums.dart';
 
 class ProjectModel extends Project {
   const ProjectModel({

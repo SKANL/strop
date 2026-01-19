@@ -39,9 +39,9 @@ class UsersPage extends StatelessWidget {
 }
 
 class _UserCard extends StatelessWidget {
-  final User user;
 
   const _UserCard({required this.user});
+  final User user;
 
   @override
   Widget build(BuildContext context) {

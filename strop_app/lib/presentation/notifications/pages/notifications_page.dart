@@ -151,15 +151,12 @@ class NotificationsPage extends StatelessWidget {
       case 'incident':
         iconData = Icons.assignment_outlined;
         color = AppColors.primary;
-        break;
       case 'success':
         iconData = Icons.check_circle_outline;
         color = AppColors.success;
-        break;
       case 'alert':
         iconData = Icons.warning_amber_rounded;
         color = AppColors.warning;
-        break;
       default:
         iconData = Icons.notifications_outlined;
         color = AppColors.textSecondary;

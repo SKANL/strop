@@ -1,23 +1,24 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:strop_app/core/di/injection_container.dart';
 import 'package:strop_app/core/theme/app_colors.dart';
 import 'package:strop_app/domain/entities/entities.dart';
 import 'package:strop_app/domain/repositories/incident_repository.dart';
 import 'package:strop_app/presentation/incidents/bloc/incident_detail_bloc.dart';
 
 class IncidentDetailPage extends StatelessWidget {
-  final String incidentId;
 
   const IncidentDetailPage({
     required this.incidentId,
     super.key,
   });
+  final String incidentId;
 
   @override
   Widget build(BuildContext context) {
     return BlocProvider(
       create: (context) => IncidentDetailBloc(
-        repository: context.read<IncidentRepository>(),
+        repository: sl<IncidentRepository>(),
       )..add(LoadIncidentDetail(incidentId)),
       child: BlocConsumer<IncidentDetailBloc, IncidentDetailState>(
         listener: (context, state) {
@@ -76,10 +77,6 @@ class IncidentDetailPage extends StatelessWidget {
 }
 
 class _IncidentDetailView extends StatefulWidget {
-  final Incident incident;
-  final List<Comment> comments;
-  final bool isCommentLoading;
-  final bool isClosing;
 
   const _IncidentDetailView({
     required this.incident,
@@ -87,6 +84,10 @@ class _IncidentDetailView extends StatefulWidget {
     required this.isCommentLoading,
     required this.isClosing,
   });
+  final Incident incident;
+  final List<Comment> comments;
+  final bool isCommentLoading;
+  final bool isClosing;
 
   @override
   State<_IncidentDetailView> createState() => _IncidentDetailViewState();
@@ -439,21 +440,39 @@ class _IncidentDetailViewState extends State<_IncidentDetailView> {
     if (widget.isCommentLoading && widget.comments.isEmpty) {
       return const Center(
         child: Padding(
-          padding: EdgeInsets.all(16.0),
+          padding: EdgeInsets.all(16),
           child: CircularProgressIndicator(),
         ),
       );
     }
 
     if (widget.comments.isEmpty) {
-      return const Padding(
-        padding: EdgeInsets.symmetric(vertical: 24),
-        child: Center(
-          child: Text(
-            'No hay comentarios aún.\nSé el primero en comentar.',
-            textAlign: TextAlign.center,
-            style: TextStyle(color: AppColors.textHint),
-          ),
+      return Container(
+        padding: const EdgeInsets.symmetric(vertical: 32),
+        child: Column(
+          children: [
+            Icon(
+              Icons.chat_bubble_outline,
+              size: 48,
+              color: AppColors.textHint.withOpacity(0.5),
+            ),
+            const SizedBox(height: 12),
+            const Text(
+              'No hay comentarios aún',
+              style: TextStyle(
+                color: AppColors.textSecondary,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            const SizedBox(height: 4),
+            const Text(
+              'Sé el primero en comentar',
+              style: TextStyle(
+                color: AppColors.textHint,
+                fontSize: 13,
+              ),
+            ),
+          ],
         ),
       );
     }
@@ -464,49 +483,99 @@ class _IncidentDetailViewState extends State<_IncidentDetailView> {
       itemCount: widget.comments.length,
       itemBuilder: (context, index) {
         final comment = widget.comments[index];
+        final isCurrentUser = comment.authorId == 'user-001';
+        final roleColor = AppColors.getRoleColor(
+          comment.author?.role?.name.toUpperCase() ?? 'RESIDENT',
+        );
+
         return Padding(
           padding: const EdgeInsets.only(bottom: 16),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               CircleAvatar(
-                radius: 16,
-                backgroundImage:
+                radius: 18,
+                backgroundColor: roleColor,
+                child:
                     comment.author?.profilePictureUrl != null &&
                         comment.author!.profilePictureUrl!.isNotEmpty
-                    ? NetworkImage(comment.author!.profilePictureUrl!)
-                    : null,
-                child: comment.author?.profilePictureUrl == null
-                    ? Text(comment.author?.fullName[0] ?? '?')
-                    : null,
+                    ? ClipOval(
+                        child: Image.network(
+                          comment.author!.profilePictureUrl!,
+                          width: 36,
+                          height: 36,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => Text(
+                            comment.author?.initials ?? '?',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 13,
+                            ),
+                          ),
+                        ),
+                      )
+                    : Text(
+                        comment.author?.initials ?? '?',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 13,
+                        ),
+                      ),
               ),
               const SizedBox(width: 12),
               Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Text(
-                          comment.author?.fullName ?? 'Usuario',
-                          style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 13,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          _formatDate(comment.createdAt),
-                          style: const TextStyle(
-                            color: AppColors.textHint,
-                            fontSize: 11,
-                          ),
-                        ),
-                      ],
+                child: Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: isCurrentUser
+                        ? AppColors.primary.withOpacity(0.1)
+                        : Colors.grey.shade100,
+                    borderRadius: const BorderRadius.only(
+                      topLeft: Radius.circular(4),
+                      topRight: Radius.circular(16),
+                      bottomLeft: Radius.circular(16),
+                      bottomRight: Radius.circular(16),
                     ),
-                    const SizedBox(height: 4),
-                    Text(comment.text),
-                  ],
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              comment.author?.fullName ?? 'Usuario',
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 13,
+                                color: isCurrentUser
+                                    ? AppColors.primary
+                                    : AppColors.textPrimary,
+                              ),
+                            ),
+                          ),
+                          Text(
+                            _getTimeAgo(comment.createdAt),
+                            style: const TextStyle(
+                              color: AppColors.textHint,
+                              fontSize: 11,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        comment.text,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          color: AppColors.textPrimary,
+                          height: 1.4,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ],
@@ -540,7 +609,6 @@ class _IncidentDetailViewState extends State<_IncidentDetailView> {
                   hintText: 'Escribe un comentario...',
                   border: InputBorder.none,
                   contentPadding: EdgeInsets.symmetric(
-                    horizontal: 0,
                     vertical: 8,
                   ),
                 ),
@@ -591,5 +659,21 @@ class _IncidentDetailViewState extends State<_IncidentDetailView> {
   String _formatDate(DateTime? date) {
     if (date == null) return '';
     return '${date.day}/${date.month}/${date.year} ${date.hour}:${date.minute.toString().padLeft(2, '0')}';
+  }
+
+  String _getTimeAgo(DateTime? date) {
+    if (date == null) return '';
+    final now = DateTime.now();
+    final diff = now.difference(date);
+
+    if (diff.inDays > 0) {
+      return 'hace ${diff.inDays}d';
+    } else if (diff.inHours > 0) {
+      return 'hace ${diff.inHours}h';
+    } else if (diff.inMinutes > 0) {
+      return 'hace ${diff.inMinutes}m';
+    } else {
+      return 'ahora';
+    }
   }
 }

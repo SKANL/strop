@@ -11,12 +11,11 @@ import 'package:strop_app/presentation/projects/widgets/project_dashboard_widget
 import 'package:strop_app/presentation/projects/widgets/project_selector_app_bar.dart';
 
 class ProjectDetailPage extends StatefulWidget {
-  final String projectId;
 
   const ProjectDetailPage({
-    super.key,
-    required this.projectId,
+    required this.projectId, super.key,
   });
+  final String projectId;
 
   @override
   State<ProjectDetailPage> createState() => _ProjectDetailPageState();
@@ -72,8 +71,6 @@ class _ProjectDetailPageState extends State<ProjectDetailPage>
           _TeamTab(project: project),
         ],
       ),
-      // FAB removed as per user request (redundant with global FAB)
-      floatingActionButton: null,
     );
   }
 }
@@ -102,11 +99,7 @@ class _DashboardTab extends StatelessWidget {
             deliveryDate: '15 Dic 2024', // Mock date
           ),
           const SizedBox(height: 24),
-          QuickAccessCards(
-            onProgramTap: () {}, // TODO(developer): Implement Navigation
-            onMaterialsTap: () {}, // TODO(developer): Implement Navigation
-          ),
-          const SizedBox(height: 24),
+
           BitacoraPreview(
             onViewAll: () => tabController.animateTo(2),
           ),
@@ -408,7 +401,7 @@ class _BitacoraTab extends StatelessWidget {
                   const SizedBox(height: 4),
                   Row(
                     children: [
-                      Icon(
+                      const Icon(
                         Icons.person_outline,
                         size: 14,
                         color: AppColors.textSecondary,

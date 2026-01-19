@@ -2,44 +2,27 @@
 // lib/presentation/profile/pages/profile_page.dart
 
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:go_router/go_router.dart';
+import 'package:strop_app/core/di/injection_container.dart';
 import 'package:strop_app/core/theme/app_colors.dart';
 import 'package:strop_app/domain/entities/entities.dart';
 import 'package:strop_app/presentation/profile/bloc/profile_bloc.dart';
-import 'package:strop_app/presentation/profile/bloc/profile_event.dart';
-import 'package:strop_app/presentation/profile/bloc/profile_state.dart';
-import 'package:strop_app/presentation/auth/bloc/auth_bloc.dart';
-import 'package:strop_app/presentation/auth/bloc/auth_event.dart';
 
-class ProfilePage extends StatefulWidget {
+class ProfilePage extends StatelessWidget {
   const ProfilePage({super.key});
 
   @override
-  State<ProfilePage> createState() => _ProfilePageState();
+  Widget build(BuildContext context) {
+    return BlocProvider(
+      create: (context) => sl<ProfileBloc>()..add(LoadProfile()),
+      child: const _ProfileView(),
+    );
+  }
 }
 
-class _ProfilePageState extends State<ProfilePage> {
-  late final TextEditingController _nameController;
-  bool _isSaving = false;
-  bool _isChangingPassword = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _nameController = TextEditingController();
-
-    final authUser = context.read<AuthBloc>().state.user;
-    if (authUser != null) {
-      context.read<ProfileBloc>().add(ProfileLoadRequested(authUser.id));
-    }
-  }
-
-  @override
-  void dispose() {
-    _nameController.dispose();
-    super.dispose();
-  }
+class _ProfileView extends StatelessWidget {
+  const _ProfileView();
 
   @override
   Widget build(BuildContext context) {
@@ -47,75 +30,76 @@ class _ProfilePageState extends State<ProfilePage> {
       backgroundColor: AppColors.backgroundLight,
       appBar: AppBar(
         title: const Text('Mi Perfil'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.settings_outlined),
-            onPressed: () => context.push('/settings/notifications'),
-          ),
-        ],
       ),
-      body: SingleChildScrollView(
-        child: Column(
-          children: [
-            const SizedBox(height: 32),
-            BlocConsumer<ProfileBloc, ProfileState>(
-              listener: (context, state) {
-                if (state is ProfileLoaded) {
-                  _nameController.text = state.user.fullName;
-                  if (_isSaving) {
-                    _isSaving = false;
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Guardado correctamente')),
-                    );
-                  }
-                }
-                if (state is ProfilePasswordChangeSuccess) {
-                  if (_isChangingPassword) {
-                    _isChangingPassword = false;
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text(state.message)),
-                    );
-                  }
-                }
-                if (state is ProfileFailure) {
-                  _isSaving = false;
-                  _isChangingPassword = false;
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text(state.message)),
-                  );
-                }
-              },
-              builder: (context, state) {
-                if (state is ProfileLoading) {
-                  return const Center(child: CircularProgressIndicator());
-                }
-                final isLoaded = state is ProfileLoaded;
-                final user = isLoaded
-                    ? (state as ProfileLoaded).user
-                    : context.read<AuthBloc>().state.user;
+      body: BlocListener<ProfileBloc, ProfileState>(
+        listener: (context, state) {
+          if (state.status == ProfileStatus.loggedOut) {
+            context.go('/login');
+          }
+        },
+        child: BlocBuilder<ProfileBloc, ProfileState>(
+          builder: (context, state) {
+            if (state.status == ProfileStatus.loading) {
+              return const Center(child: CircularProgressIndicator());
+            }
+            if (state.status == ProfileStatus.error) {
+              return Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(
+                      Icons.error_outline,
+                      size: 48,
+                      color: AppColors.error,
+                    ),
+                    const SizedBox(height: 16),
+                    Text(state.errorMessage ?? 'Error al cargar perfil'),
+                    const SizedBox(height: 16),
+                    ElevatedButton(
+                      onPressed: () =>
+                          context.read<ProfileBloc>().add(LoadProfile()),
+                      child: const Text('Reintentar'),
+                    ),
+                  ],
+                ),
+              );
+            }
 
-                if (user == null) return const SizedBox.shrink();
+            final user = state.user;
+            if (user == null) {
+              return const Center(
+                child: Text('No se encontró información del usuario'),
+              );
+            }
 
-                return _buildProfileHeader(context, user, isLoaded);
-              },
-            ),
-            const SizedBox(height: 32),
-            _buildSyncSection(context),
-            const SizedBox(height: 32),
-            _buildOrganizationSection(context),
-            const SizedBox(height: 32),
-            _buildSecuritySection(context),
-            const SizedBox(height: 32),
-            _buildSettingsSection(context),
-            const SizedBox(height: 32),
-            _buildLogoutButton(context),
-          ],
+            return SingleChildScrollView(
+              child: Column(
+                children: [
+                  const SizedBox(height: 32),
+                  _buildProfileHeader(context, user),
+                  const SizedBox(height: 32),
+                  _buildSyncSection(context),
+                  const SizedBox(height: 32),
+                  _buildOrganizationSection(context, user),
+                  const SizedBox(height: 32),
+                  _buildSecuritySection(context),
+                  const SizedBox(height: 32),
+                  _buildSettingsSection(context, user),
+                  const SizedBox(height: 32),
+                  _buildLogoutButton(context),
+                  const SizedBox(height: 32),
+                ],
+              ),
+            );
+          },
         ),
       ),
     );
   }
 
-  Widget _buildProfileHeader(BuildContext context, User user, bool isLoaded) {
+  Widget _buildProfileHeader(BuildContext context, User user) {
+    // Note: removed isLoaded param, _nameController etc as this is now stateless
+    // and profile editing is disabled in this version for now
     return Column(
       children: [
         Hero(
@@ -123,20 +107,24 @@ class _ProfilePageState extends State<ProfilePage> {
           child: CircleAvatar(
             radius: 50,
             backgroundColor: AppColors.roleSuperintendent,
-            child: Text(
-              user.initials,
-              style: const TextStyle(
-                fontSize: 32,
-                fontWeight: FontWeight.bold,
-                color: Colors.white,
-              ),
-            ),
+            backgroundImage: user.profilePictureUrl != null
+                ? NetworkImage(user.profilePictureUrl!)
+                : null,
+            child: user.profilePictureUrl == null
+                ? Text(
+                    user.initials,
+                    style: const TextStyle(
+                      fontSize: 32,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  )
+                : null,
           ),
         ),
         const SizedBox(height: 16),
-        TextField(
-          controller: _nameController,
-          decoration: const InputDecoration(border: InputBorder.none),
+        Text(
+          user.fullName,
           style: Theme.of(context).textTheme.headlineSmall?.copyWith(
             fontWeight: FontWeight.bold,
             color: AppColors.textPrimary,
@@ -165,80 +153,14 @@ class _ProfilePageState extends State<ProfilePage> {
           ),
         ),
         const SizedBox(height: 16),
-        Row(
+        const Row(
           mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            TextButton.icon(
-              onPressed: !isLoaded
-                  ? null
-                  : () async {
-                      // Save profile — only allowed when ProfileBloc loaded the profile
-                      final currentState = context.read<ProfileBloc>().state;
-                      if (currentState is! ProfileLoaded) return;
-                      final existing = currentState.user;
-                      final updated = existing.copyWith(
-                        fullName: _nameController.text.trim(),
-                      );
-                      _isSaving = true;
-                      context.read<ProfileBloc>().add(
-                        ProfileUpdateRequested(updated),
-                      );
-                    },
-              icon: const Icon(Icons.save_outlined, size: 16),
-              label: const Text('Guardar'),
-              style: TextButton.styleFrom(foregroundColor: AppColors.primary),
-            ),
-            const SizedBox(width: 8),
-            TextButton.icon(
-              onPressed: () async {
-                // Change password dialog
-                final result = await showDialog<String?>(
-                  context: context,
-                  builder: (ctx) {
-                    final pwController = TextEditingController();
-                    return AlertDialog(
-                      title: const Text('Cambiar contraseña'),
-                      content: TextField(
-                        controller: pwController,
-                        obscureText: true,
-                        decoration: const InputDecoration(
-                          labelText: 'Nueva contraseña',
-                        ),
-                      ),
-                      actions: [
-                        TextButton(
-                          onPressed: () => Navigator.of(ctx).pop(),
-                          child: const Text('Cancelar'),
-                        ),
-                        TextButton(
-                          onPressed: () =>
-                              Navigator.of(ctx).pop(pwController.text),
-                          child: const Text('Cambiar'),
-                        ),
-                      ],
-                    );
-                  },
-                );
-                if (result != null && result.isNotEmpty) {
-                  _isChangingPassword = true;
-                  context.read<ProfileBloc>().add(
-                    ProfileChangePasswordRequested(result),
-                  );
-                }
-              },
-              icon: const Icon(Icons.lock_outline, size: 16),
-              label: const Text('Cambiar contraseña'),
-              style: TextButton.styleFrom(
-                foregroundColor: AppColors.textPrimary,
-              ),
-            ),
-          ],
         ),
       ],
     );
   }
 
-  Widget _buildOrganizationSection(BuildContext context) {
+  Widget _buildOrganizationSection(BuildContext context, User user) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -266,8 +188,10 @@ class _ProfilePageState extends State<ProfilePage> {
               ),
               child: const Icon(Icons.business, color: Colors.blue),
             ),
-            title: const Text('Constructora Demo S.A.'),
-            subtitle: const Text('Plan Professional'),
+            title: Text(
+              user.currentOrganizationId ?? 'Organización desconocida',
+            ),
+            subtitle: const Text('Plan Professional'), // Placeholder
             trailing: const Icon(
               Icons.chevron_right,
               color: AppColors.textHint,
@@ -278,7 +202,7 @@ class _ProfilePageState extends State<ProfilePage> {
     );
   }
 
-  Widget _buildSettingsSection(BuildContext context) {
+  Widget _buildSettingsSection(BuildContext context, User user) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -317,9 +241,9 @@ class _ProfilePageState extends State<ProfilePage> {
                   color: AppColors.textPrimary,
                 ),
                 title: const Text('Tema'),
-                trailing: const Text(
-                  'Sistema',
-                  style: TextStyle(color: AppColors.textSecondary),
+                trailing: Text(
+                  user.themeMode ?? 'Sistema',
+                  style: const TextStyle(color: AppColors.textSecondary),
                 ),
                 onTap: () {
                   // TODO(developer): Change theme
@@ -337,9 +261,7 @@ class _ProfilePageState extends State<ProfilePage> {
       padding: const EdgeInsets.symmetric(horizontal: 24),
       child: OutlinedButton.icon(
         onPressed: () {
-          // Reset profile state then logout
-          context.read<ProfileBloc>().add(ProfileReset());
-          context.read<AuthBloc>().add(AuthLogoutRequested());
+          context.read<ProfileBloc>().add(LogoutRequested());
         },
         style: OutlinedButton.styleFrom(
           foregroundColor: AppColors.error,
@@ -376,11 +298,11 @@ class _ProfilePageState extends State<ProfilePage> {
             child: const Icon(Icons.sync, color: AppColors.primary),
           ),
           const SizedBox(width: 16),
-          Expanded(
+          const Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
+                Text(
                   'Cola de Sincronización',
                   style: TextStyle(
                     fontWeight: FontWeight.bold,
@@ -389,7 +311,7 @@ class _ProfilePageState extends State<ProfilePage> {
                 ),
                 Text(
                   '$pendingItems pendientes • Última sync: $lastSync',
-                  style: const TextStyle(
+                  style: TextStyle(
                     color: AppColors.textSecondary,
                     fontSize: 12,
                   ),
@@ -435,7 +357,6 @@ class _ProfilePageState extends State<ProfilePage> {
               color: AppColors.textHint,
             ),
             onTap: () {
-              // TODO(developer): Change password flow
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(content: Text('Función próximamente')),
               );

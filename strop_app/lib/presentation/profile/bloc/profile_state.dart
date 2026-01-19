@@ -1,37 +1,30 @@
-import 'package:equatable/equatable.dart';
-import 'package:strop_app/domain/entities/user.dart';
+part of 'profile_bloc.dart';
 
-abstract class ProfileState extends Equatable {
-  @override
-  List<Object?> get props => [];
-}
+enum ProfileStatus { initial, loading, loaded, error, loggedOut }
 
-class ProfileInitial extends ProfileState {}
+class ProfileState extends Equatable {
 
-class ProfileLoading extends ProfileState {}
+  const ProfileState({
+    this.status = ProfileStatus.initial,
+    this.user,
+    this.errorMessage,
+  });
+  final ProfileStatus status;
+  final User? user;
+  final String? errorMessage;
 
-class ProfileLoaded extends ProfileState {
-  final User user;
-  ProfileLoaded(this.user);
-
-  @override
-  List<Object?> get props => [user];
-}
-
-class ProfileFailure extends ProfileState {
-  final String message;
-  ProfileFailure(this.message);
-
-  @override
-  List<Object?> get props => [message];
-}
-
-class ProfilePasswordChangeSuccess extends ProfileState {
-  final String message;
-  ProfilePasswordChangeSuccess([
-    this.message = 'Contraseña actualizada correctamente',
-  ]);
+  ProfileState copyWith({
+    ProfileStatus? status,
+    User? user,
+    String? errorMessage,
+  }) {
+    return ProfileState(
+      status: status ?? this.status,
+      user: user ?? this.user,
+      errorMessage: errorMessage ?? this.errorMessage,
+    );
+  }
 
   @override
-  List<Object?> get props => [message];
+  List<Object?> get props => [status, user, errorMessage];
 }

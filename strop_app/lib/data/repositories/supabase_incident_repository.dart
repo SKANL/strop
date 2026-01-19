@@ -1,11 +1,12 @@
 import 'dart:io';
-import 'package:supabase_flutter/supabase_flutter.dart';
+
 import 'package:strop_app/core/utils/file_validators.dart';
+import 'package:strop_app/core/utils/logger.dart';
 import 'package:strop_app/data/models/comment_model.dart';
 import 'package:strop_app/data/models/incident_model.dart';
 import 'package:strop_app/domain/entities/entities.dart';
 import 'package:strop_app/domain/repositories/incident_repository.dart';
-import 'package:strop_app/core/utils/logger.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 /// Supabase implementation of IncidentRepository
 class SupabaseIncidentRepository implements IncidentRepository {
@@ -238,7 +239,6 @@ class SupabaseIncidentRepository implements IncidentRepository {
           .upload(
             storagePath,
             file,
-            fileOptions: const FileOptions(cacheControl: '3600', upsert: false),
           );
 
       // 3. Get Public URL (or Signed URL if private bucket)
