@@ -7,7 +7,6 @@ import { es } from 'date-fns/locale';
 import {
   MapPin,
   Calendar,
-  Users,
   AlertTriangle,
   Pencil,
   MoreHorizontal,
@@ -32,7 +31,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Progress } from '@/components/ui/progress';
+
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { ConfirmDialog } from '@/components/shared';
 import { AddProjectMemberModal } from './add-member-modal';
@@ -61,9 +60,6 @@ export function ProjectDetail({ project, members, incidents }: ProjectDetailProp
   const status = statusConfig[project.status];
   const openIncidents = incidents.filter((i) => i.status !== 'CLOSED').length;
   const criticalIncidents = incidents.filter((i) => i.priority === 'CRITICAL').length;
-
-  // TODO: Calculate real progress based on project milestones or tasks
-  const progress = 0;
 
   return (
     <div className="space-y-6">
@@ -122,26 +118,7 @@ export function ProjectDetail({ project, members, incidents }: ProjectDetailProp
       </div>
 
       {/* Stats Cards */}
-      <div className="grid gap-4 md:grid-cols-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Progreso</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{progress}%</div>
-            <Progress value={progress} className="mt-2" />
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Miembros</CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{members.length}</div>
-            <p className="text-xs text-muted-foreground">asignados al proyecto</p>
-          </CardContent>
-        </Card>
+      <div className="grid gap-4 md:grid-cols-2">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Incidencias</CardTitle>
@@ -175,7 +152,7 @@ export function ProjectDetail({ project, members, incidents }: ProjectDetailProp
         <TabsList>
           <TabsTrigger value="overview">Resumen</TabsTrigger>
           <TabsTrigger value="members">
-            Miembros ({members.length})
+            Equipo ({members.length})
           </TabsTrigger>
           <TabsTrigger value="incidents">
             Incidencias ({incidents.length})
@@ -237,7 +214,7 @@ export function ProjectDetail({ project, members, incidents }: ProjectDetailProp
 
         <TabsContent value="members" className="space-y-4">
           <div className="flex justify-between">
-            <h3 className="text-lg font-medium">Miembros del equipo</h3>
+            <h3 className="text-lg font-medium">Equipo del proyecto</h3>
             <Button size="sm" onClick={() => setShowAddMember(true)}>Agregar miembro</Button>
             <AddProjectMemberModal open={showAddMember} onOpenChange={setShowAddMember} projectId={project.id} />
           </div>
