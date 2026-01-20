@@ -83,8 +83,7 @@ function MapLayers({ data }: DashboardMapProps) {
         (map.getSource('incidents') as MapLibreGL.GeoJSONSource).setData(incidentsData as any)
     }
 
-    // Add Layers
-    // Projects Layer (Blue Circles)
+    // Projects Layer (Color based on health status)
     if (!map.getLayer('projects-layer')) {
       map.addLayer({
         id: 'projects-layer',
@@ -92,7 +91,12 @@ function MapLayers({ data }: DashboardMapProps) {
         source: 'projects',
         paint: {
           'circle-radius': 8,
-          'circle-color': '#22c55e', // green-500
+          'circle-color': [
+            'case',
+            ['==', ['get', 'healthStatus'], 'critical'], '#ef4444', // red-500
+            ['==', ['get', 'healthStatus'], 'warning'], '#eab308',  // yellow-500
+            '#22c55e' // green-500 (healthy)
+          ],
           'circle-stroke-width': 2,
           'circle-stroke-color': '#ffffff',
         },

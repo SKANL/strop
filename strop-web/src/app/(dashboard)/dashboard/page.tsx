@@ -191,11 +191,11 @@ export default async function DashboardPage() {
                     <div key={project.id} className="flex items-center">
                       <div
                         className={`size-2 rounded-full ${
-                          project.status === 'ACTIVE'
-                            ? 'bg-green-500'
-                            : project.status === 'PAUSED'
+                          project.healthStatus === 'critical'
+                            ? 'bg-red-500'
+                            : project.healthStatus === 'warning'
                             ? 'bg-yellow-500'
-                            : 'bg-gray-500'
+                            : 'bg-green-500'
                         }`}
                       />
                       <div className="ml-4 flex-1 space-y-1">

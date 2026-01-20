@@ -42,6 +42,7 @@ interface RecentProject {
   id: string
   name: string
   status: 'ACTIVE' | 'PAUSED' | 'COMPLETED'
+  healthStatus: 'critical' | 'warning' | 'healthy'
 }
 
 // ============================================================================
@@ -241,12 +242,38 @@ export async function getRecentProjectsAction(): Promise<ActionResult<RecentProj
       return { success: false, error: error.message, data: [] }
     }
 
+    // Get incident counts per project to determine health status
+    const projectIds = (projects || []).map(p => p.id)
+    
+    const { data: incidentCounts } = await supabase
+      .from('incidents')
+      .select('project_id, priority')
+      .in('project_id', projectIds)
+      .in('status', ['OPEN', 'ASSIGNED'])
+
+    // Build a map of project health status
+    const healthMap = new Map<string, 'critical' | 'warning' | 'healthy'>()
+    for (const projectId of projectIds) {
+      const projectIncidents = (incidentCounts || []).filter(i => i.project_id === projectId)
+      const hasCritical = projectIncidents.some(i => i.priority === 'CRITICAL')
+      const hasNormal = projectIncidents.some(i => i.priority === 'NORMAL')
+      
+      if (hasCritical) {
+        healthMap.set(projectId, 'critical')
+      } else if (hasNormal) {
+        healthMap.set(projectId, 'warning')
+      } else {
+        healthMap.set(projectId, 'healthy')
+      }
+    }
+
     return {
       success: true,
       data: (projects || []).map((p) => ({
         id: p.id,
         name: p.name,
         status: p.status as 'ACTIVE' | 'PAUSED' | 'COMPLETED',
+        healthStatus: healthMap.get(p.id) || 'healthy',
       })),
     }
   } catch (error) {
@@ -356,7 +383,30 @@ export async function getMapDataAction(): Promise<ActionResult<MapData>> {
       })
     )
 
-    // 4. Transform to GeoJSON
+    // 4. Calculate health status for each project based on incidents
+    const projectIds = processedProjects.map(p => p.id)
+    const { data: incidentCounts } = await supabase
+      .from('incidents')
+      .select('project_id, priority')
+      .in('project_id', projectIds)
+      .in('status', ['OPEN', 'ASSIGNED'])
+
+    const healthMap = new Map<string, 'critical' | 'warning' | 'healthy'>()
+    for (const projectId of projectIds) {
+      const projectIncidents = (incidentCounts || []).filter(i => i.project_id === projectId)
+      const hasCritical = projectIncidents.some(i => i.priority === 'CRITICAL')
+      const hasNormal = projectIncidents.some(i => i.priority === 'NORMAL')
+      
+      if (hasCritical) {
+        healthMap.set(projectId, 'critical')
+      } else if (hasNormal) {
+        healthMap.set(projectId, 'warning')
+      } else {
+        healthMap.set(projectId, 'healthy')
+      }
+    }
+
+    // 5. Transform to GeoJSON
     const projectFeatures: GeoJSONFeature[] = processedProjects
       .filter((p) => p.latitude && p.longitude)
       .map((p) => ({
@@ -371,6 +421,7 @@ export async function getMapDataAction(): Promise<ActionResult<MapData>> {
           name: p.name,
           status: p.status,
           location: p.location || undefined,
+          healthStatus: healthMap.get(p.id) || 'healthy',
         },
       }))
 
