@@ -357,14 +357,21 @@ export async function getProjectDetailAction(projectId: string): Promise<ActionR
     const [membersResult, incidentsResult] = await Promise.all([
       supabase
         .from('project_members')
-        .select('user_id,assigned_role'),
+        .select('user_id, assigned_role, users!inner(id, full_name, email)')
+        .eq('project_id', projectId),
       supabase
         .from('incidents')
         .select('*')
         .eq('project_id', projectId),
     ])
 
-    const members = (membersResult.data || []).map((m: any) => m.user_id)
+    // Transform members to User format
+    const members = (membersResult.data || []).map((m: any) => ({
+      id: m.users.id,
+      full_name: m.users.full_name,
+      email: m.users.email,
+      role: m.assigned_role,
+    }))
 
     // Normalize property name: DB uses `end_date` but UI expects `expected_end_date`.
     const projectWithExpected = {
