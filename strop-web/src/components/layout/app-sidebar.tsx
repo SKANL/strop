@@ -6,7 +6,6 @@ import {
   FolderKanban,
   AlertTriangle,
   Users,
-  ClipboardList,
   Settings,
   Search,
 } from 'lucide-react';
@@ -57,11 +56,7 @@ const mainNavItems: NavMainItem[] = [
     // Pass the resulting `count` into `AppSidebar` as a prop (e.g. `incidentCount`) and
     // render it via the `NavMainItem.badge` property instead of a hard-coded value.
   },
-  {
-    title: 'Bitácora',
-    url: '/bitacora',
-    icon: ClipboardList,
-  },
+
   {
     title: 'Equipo',
     url: '/team',
